@@ -2,7 +2,7 @@ import socket
 import time
 import threading
 
-class Dynalite:
+class dynalite:
     def __init__(self, host, port):
         ''' Constructor for this class. '''
         self.host = host
