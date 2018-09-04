@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import time
 # Import classes
-from Dynalite import Dynalite
+from dynalite import dynalite
 
 HOST = '10.7.3.212'  # Standard loopback interface address (localhost)
 PORT = 12345        # Port to listen on (non-privileged ports are > 1023)
