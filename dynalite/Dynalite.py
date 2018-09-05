@@ -34,7 +34,6 @@ class AreaPreset:
         return str(self.__dict__)
 
 
-
 class DynaliteEvent:
     type = 'unknown'
     area = None
@@ -45,6 +44,7 @@ class DynaliteEvent:
     fade = None
     dim = None
     msg = None
+    object = None
 
     def __init__(self, msg=None):
         self.msg = msg
@@ -54,11 +54,12 @@ class DynaliteEvent:
 
 
 class Dynalite:
-    def __init__(self, host, port):
+    def __init__(self, host, port=12345):
         ''' Constructor for this class. '''
         self.host = host
         self.port = port
-        self.messagesize = 7    # How many bytes in a message
+        # How many bytes in a message (not including checksum)
+        self.messagesize = 7
         self.template = bytearray([28, 0, 0, 0, 0, 0, 0])
         self.connected = False
         self.timeout = 900
@@ -127,8 +128,18 @@ class Dynalite:
     def setAreaPreset(self, area, preset, state=None):
         if area not in self.areaPresets:
             self.areaPresets[area] = {}
+            event = DynaliteEvent()
+            event.type = 'newarea'
+            event.area = area
+            self.handler(event)
         if preset not in self.areaPresets[area]:
             self.areaPresets[area][preset] = AreaPreset(area, preset, self)
+            event = DynaliteEvent()
+            event.type = 'newpreset'
+            event.area = area
+            event.preset = preset
+            event.object = self.areaPresets[area][preset]
+            self.handler(event)
         if state is not None:
             self.areaPresets[area][preset].setState(state)
             if state is True:
@@ -189,7 +200,8 @@ class Dynalite:
             event.area = area
 
         if len(msg) > self.messagesize + 1:
-            print("Extra %s bytes:\t%s" % (len(msg)-self.messagesize + 1,msg[self.messagesize + 1:]))
+            print("Extra %s bytes:\t%s" %
+                  (len(msg) - self.messagesize + 1, msg[self.messagesize + 1:]))
             self.process_message(msg[self.messagesize + 1:])
 
         return event
