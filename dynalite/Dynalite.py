@@ -2,7 +2,58 @@ import socket
 import time
 import threading
 
-class dynalite:
+
+class AreaPreset:
+    area = None
+    preset = None
+
+    def __init__(self, area, preset, dynet):
+        self.area = area
+        self.preset = preset
+        self._state = False
+
+    def turn_on(self):
+        dynet.setPreset(self.area, self.preset)
+        self._state = True
+        return True
+
+    def turn_off(self):
+        self._state = False
+        return True
+
+    def ison(self):
+        return self._state
+
+    def update(self):
+        dynet.reqPreset(self.area)
+
+    def setState(self, state):
+        self._state = state
+
+    def __repr__(self):
+        return str(self.__dict__)
+
+
+
+class DynaliteEvent:
+    type = 'unknown'
+    area = None
+    preset = None
+    status = None
+    host = None
+    port = None
+    fade = None
+    dim = None
+    msg = None
+
+    def __init__(self, msg=None):
+        self.msg = msg
+
+    def __repr__(self):
+        return str(self.__dict__)
+
+
+class Dynalite:
     def __init__(self, host, port):
         ''' Constructor for this class. '''
         self.host = host
@@ -11,12 +62,27 @@ class dynalite:
         self.template = bytearray([28, 0, 0, 0, 0, 0, 0])
         self.connected = False
         self.timeout = 900
+        self.areaPresets = {}
 
-    def connect(self, handler):
-        self.handler = handler
+    def connect(self, handler=None):
+        self.postHandler = handler
         thread = threading.Thread(target=self.socketReceive, args=())
-        thread.daemon = False                            # Daemonize thread
+        thread.daemon = False                            # No not daemonize thread
         thread.start()                                  # Start the execution
+
+    def handler(self, event):
+        now = time.strftime("%c")
+        if event.type == 'preset':
+            if event.area is not None and event.preset is not None:
+                self.setAreaPreset(event.area, event.preset, True)
+        elif event.type == 'presetupdate':
+            if event.area is not None and event.preset is not None:
+                self.setAreaPreset(event.area, event.preset, True)
+        if self.postHandler is not None:
+            return self.postHandler(event)
+        else:
+            print("%s %s" % (now, event))
+        return True
 
     def connectSocket(self):
         self.connected = False
@@ -27,11 +93,19 @@ class dynalite:
                 self.s.connect((self.host, self.port))
                 self.s.settimeout(self.timeout)
                 self.connected = True
-                self.handler({"type": "connection", "status": "connected",
-                              "host": self.host, "port": self.port})
+                event = DynaliteEvent()
+                event.type = 'connection'
+                event.status = 'connected'
+                event.host = self.host
+                event.port = self.port
+                self.handler(event)
             except (socket.error, socket.timeout) as e:
-                self.handler({"type": "connection", "status": "failed",
-                              "host": self.host, "port": self.port})
+                event = DynaliteEvent()
+                event.type = 'connection'
+                event.status = 'failed'
+                event.host = self.host
+                event.port = self.port
+                self.handler(event)
                 time.sleep(2)
         return True
 
@@ -44,6 +118,24 @@ class dynalite:
                 self.handler(self.process_message(buf))
             except (socket.error, socket.timeout) as e:
                 self.connectSocket()
+
+    def getAreaPresets(self, area):
+        if area not in self.areaPresets:
+            self.areaPresets[area] = {}
+        return self.areaPresets[area]
+
+    def setAreaPreset(self, area, preset, state=None):
+        if area not in self.areaPresets:
+            self.areaPresets[area] = {}
+        if preset not in self.areaPresets[area]:
+            self.areaPresets[area][preset] = AreaPreset(area, preset, self)
+        if state is not None:
+            self.areaPresets[area][preset].setState(state)
+            if state is True:
+                self.areaPresets[area]['_current'] = preset
+                for p in self.areaPresets[area]:
+                    if p != preset and p != '_current':
+                        self.areaPresets[area][p].setState(state)
 
     def getHost(self):
         return self.host
@@ -70,35 +162,35 @@ class dynalite:
         chk = msg[7]
 
         if sync != 28:
-            try:
-                self.handler({"type": "in", "msg": data,
-                              "error": "Not a logical message"})
-            except AttributeError:
-                # No handler available
-                pass
-            return False
+            event = DynaliteEvent(data)
+            event.type = 'in'
+            event.error = 'Not a logical message'
+            return self.handler(event)
 
         if opcode < 9:
             event = self.process_preset(
                 area, opcode, data1, data2, data3, join)
-            event["msg"] = msg
+            event.msg = msg
         elif opcode == 72:
             event = self.process_indicatorled(area, data1, data2, data3, join)
-            event["msg"] = msg
+            event.msg = msg
         elif opcode == 98:
             event = self.process_areastatus(area, data1)
-            event["msg"] = msg
+            event.msg = msg
         elif opcode == 99:
             event = self.process_reqareastatus(area)
-            event["msg"] = msg
+            event.msg = msg
         elif opcode == 101:
             event = self.process_linearpreset(area, data1, data2, data3, join)
-            event["msg"] = msg
+            event.msg = msg
         else:
-            event = {"type": "unknown", "msg": msg, "area": area}
+            event = DynaliteEvent(msg)
+            event.type = 'unknown'
+            event.area = area
 
         if len(msg) > self.messagesize + 1:
-            print("Extra data:\t", msg)
+            print("Extra %s bytes:\t%s" % (len(msg)-self.messagesize + 1,msg[self.messagesize + 1:]))
+            self.process_message(msg[self.messagesize + 1:])
 
         return event
 
@@ -128,11 +220,10 @@ class dynalite:
 
         try:
             self.s.sendall(data)
-            try:
-                self.handler({"type": "out", "msg": data})
-            except AttributeError:
-                # No handler available
-                pass
+            event = DynaliteEvent(data)
+            event.type = 'out'
+            self.handler(event)
+            self.process_message(data)
             time.sleep(0.2)
         except (socket.error, socket.timeout) as e:
             self.connectSocket()
@@ -140,12 +231,22 @@ class dynalite:
     def process_preset(self, area, opcode, fadeLow, fadeHigh, bank, join):
         preset = (opcode + (bank * 8)) + 1
         fade = (fadeLow + (fadeHigh * 256)) * 0.02
-        return {"type": "preset", "area": area, "preset": preset, "fade": fade}
+        event = DynaliteEvent()
+        event.type = 'preset'
+        event.area = area
+        event.preset = preset
+        event.fade = fade
+        return event
 
     def process_linearpreset(self, area, preset, fadeLow, fadeHigh, join):
         preset = preset + 1
         fade = (fadeLow + (fadeHigh * 256)) * 0.02
-        return {"type": "preset", "area": area, "preset": preset, "fade": fade}
+        event = DynaliteEvent()
+        event.type = 'preset'
+        event.area = area
+        event.preset = preset
+        event.fade = fade
+        return event
 
     def process_indicatorled(self, area, type, dimming, fadeVal, join):
         if type == 1:
@@ -162,14 +263,26 @@ class dynalite:
 
         dimpc = round((256 - dimming) / 255, 2) * 100
 
-        return {"type": "indicator", "sub": typeName, "area": area, "dim": dimpc, "fade": fade}
+        event = DynaliteEvent()
+        event.type = 'indicator_' + typeName
+        event.area = area
+        event.dim = dimpc
+        event.fade = fade
+        return event
 
     def process_areastatus(self, area, preset):
         preset = preset + 1
-        return {"type": "presetupdate", "area": area, "preset": preset}
+        event = DynaliteEvent()
+        event.type = 'presetupdate'
+        event.area = area
+        event.preset = preset
+        return event
 
     def process_reqareastatus(self, area):
-        return {"type": "presetrequest", "area": area}
+        event = DynaliteEvent()
+        event.type = 'presetrequest'
+        event.area = area
+        return event
 
     def reqPreset(self, area):
         cmd = self.template[:]
