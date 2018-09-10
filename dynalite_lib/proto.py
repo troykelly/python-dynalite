@@ -4,7 +4,7 @@ import asyncio
 from functools import reduce
 import logging
 
-from .message import get_elk_command, timeout_decode
+from .message import get_dynet_command, timeout_decode
 
 LOG = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class Connection(asyncio.Protocol):
         self._waiting_for_response = None
         self._timeout_task = None
         self._queued_writes = []
-        self._buffer = ''
+        self._buffer = bytearray()
         self._paused = False
 
     def connection_made(self, transport):
@@ -41,7 +41,7 @@ class Connection(asyncio.Protocol):
         self._cancel_timer()
         self._waiting_for_response = None
         self._queued_writes = []
-        self._buffer = ''
+        self._buffer = bytearray()
 
     def pause(self):
         """Pause the connection from sending/receiving."""
@@ -64,10 +64,14 @@ class Connection(asyncio.Protocol):
             self._timeout_task = None
 
     def data_received(self, data):
-        self._buffer += data.decode('ISO-8859-1')
-        while "\r\n" in self._buffer:
-            line, self._buffer = self._buffer.split("\r\n", 1)
-            if get_elk_command(line) == self._waiting_for_response:
+        self._buffer += data
+        while len(self._buffer) > 7:
+            line = self._buffer[:8]
+            if len(self._buffer[8:]) > 7:
+                self._buffer = self._buffer[8:]
+            else:
+                self._buffer = bytearray()
+            if get_dynet_command(line) == self._waiting_for_response:
                 self._waiting_for_response = None
                 self._cancel_timer()
             self._got_data_callback(line)
@@ -98,10 +102,8 @@ class Connection(asyncio.Protocol):
                     timeout, self._response_required_timeout)
 
         if not raw:
-            cksum = 256 - reduce(lambda x, y: x+y, map(ord, data)) % 256
-            data = data + '{:02X}'.format(cksum)
-            if int(data[0:2], 16) != len(data)-2:
-                LOG.debug("message length wrong: %s", data)
+            cksum = (-(sum(ord(c) for c in "".join(map(chr, data))) % 256) & 0xFF)
+            data += cksum
 
         LOG.debug("write_data '%s'", data)
         self._transport.write((data + '\r\n').encode())

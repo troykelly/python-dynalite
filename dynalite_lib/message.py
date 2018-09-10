@@ -51,19 +51,29 @@ def opcodebank_to_preset(opcodebank):
         opcode = opcode - 6
     return (opcode + (bank * 8)) + 1
 
-
-def get_dynet_command(msg):
-    """Return the 2 character command in the message."""
+def get_dynet_sync(msg):
+    """Return the sync code in the message."""
     if len(msg) < 8:
         return False
-    return line[3]
+    return msg[0]
 
+def get_dynet_command(msg):
+    """Return the opcode in the message."""
+    if len(msg) < 8:
+        return False
+    return msg[3]
+
+def get_dynet_area(msg):
+    """Return area the message is intended for."""
+    if len(msg) < 8:
+        return False
+    return msg[1]
 
 def get_dynet_data(msg):
     """Return the three data bytes from a dynet message."""
     if len(msg) < 8:
         return False
-    return bytearray([msg[1], msg[4], msg[5]])
+    return bytearray([msg[2], msg[4], msg[5]])
 
 
 def get_dynet_join(msg):
@@ -74,7 +84,7 @@ def get_dynet_join(msg):
 
 
 def get_dynet_checksum(msg):
-    """Return the join mask of a dynet message."""
+    """Return the checksum of a dynet message."""
     if len(msg) < 8:
         return False
     return msg[7]
@@ -92,6 +102,107 @@ class call_handlers():  # pylint: disable=invalid-name,too-few-public-methods
             for handler in _message_handlers.get(self.cmd, []):
                 handler(**decoded_msg)
         return wrapped_f
+
+@call_handlers(0)
+def _opcode_0_decode(msg):
+    """0: First preset in bank."""
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = (opcode + (data[2] * 8)) + 1
+    fade = (data[0] + (data[1] * 256)) * 0.02
+    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+
+@call_handlers(1)
+def _opcode_1_decode(msg):
+    """3: Second preset in bank."""
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = (opcode + (data[2] * 8)) + 1
+    fade = (data[0] + (data[1] * 256)) * 0.02
+    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+
+@call_handlers(2)
+def _opcode_2_decode(msg):
+    """0: Third preset in bank."""
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = (opcode + (data[2] * 8)) + 1
+    fade = (data[0] + (data[1] * 256)) * 0.02
+    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+
+@call_handlers(3)
+def _opcode_3_decode(msg):
+    """3: Forth preset in bank."""
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = (opcode + (data[2] * 8)) + 1
+    fade = (data[0] + (data[1] * 256)) * 0.02
+    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+
+@call_handlers(10)
+def _opcode_10_decode(msg):
+    """0: Fifth preset in bank."""
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = ((opcode - 6) + (data[2] * 8)) + 1
+    fade = (data[0] + (data[1] * 256)) * 0.02
+    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+
+@call_handlers(11)
+def _opcode_11_decode(msg):
+    """3: Sixth preset in bank."""
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = ((opcode - 6) + (data[2] * 8)) + 1
+    fade = (data[0] + (data[1] * 256)) * 0.02
+    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+
+@call_handlers(12)
+def _opcode_12_decode(msg):
+    """0: Seventh preset in bank."""
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = ((opcode - 6) + (data[2] * 8)) + 1
+    fade = (data[0] + (data[1] * 256)) * 0.02
+    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+
+@call_handlers(13)
+def _opcode_13_decode(msg):
+    """3: Eigth preset in bank."""
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = ((opcode - 6) + (data[2] * 8)) + 1
+    fade = (data[0] + (data[1] * 256)) * 0.02
+    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+
+@call_handlers(101)
+def _opcode_101_decode(msg):
+    """101: Linear Preset."""
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = data[0] + 1
+    fade = (data[1] + (data[2] * 256)) * 0.02
+    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+
+#
 #
 #
 # @call_handlers('AS')
@@ -316,7 +427,9 @@ class call_handlers():  # pylint: disable=invalid-name,too-few-public-methods
 @call_handlers('unknown')
 def _unknown_decode(msg):
     """Generic handler called when no specific handler exists"""
-    return {'opcode': get_dynet_command(msg), 'data': get_dynet_data(msg), 'join': get_dynet_join(msg)}
+    unknown = {'area': get_dynet_area(msg), 'opcode': get_dynet_command(msg), 'data': get_dynet_data(msg), 'join': get_dynet_join(msg)}
+    print(unknown)
+    return unknown
 
 
 @call_handlers('timeout')
@@ -331,13 +444,15 @@ def _calc_checksum(msg):
     Sums the ASCII character values mod256 and returns
     the lower byte of the two's complement of that value.
     """
-    return '%2X' % (-(sum(ord(c) for c in "".join(map(chr, s))) % 256) & 0xFF)
+    #return '%2X' % (-(sum(ord(c) for c in "".join(map(chr, msg))) % 256) & 0xFF)
+    return (-(sum(ord(c) for c in "".join(map(chr, msg))) % 256) & 0xFF)
+
 
 
 def _check_checksum(msg):
     """Ensure checksum in message is good."""
-    checksum = int(_calc_checksum(msg[0:6]),16)
-    if checksum != msg[7]
+    checksum = _calc_checksum(msg[:7])
+    if checksum != msg[7]:
         raise ValueError("Dynet message checksum invalid")
 
 
@@ -346,6 +461,8 @@ def _check_message_valid(msg):
     try:
         if len(msg) < 8:
             raise ValueError("Dynet message length incorrect")
+        if get_dynet_sync(msg) != 28:
+            raise ValueError("Not a logical message")
         _check_checksum(msg)
     except IndexError:
         raise ValueError("Dynet message length incorrect")
@@ -357,7 +474,7 @@ def message_decode(msg):
 
     cmd = get_dynet_command(msg)
 
-    decoder_name = 'opcode_' + str(cmd) + '_decode'
+    decoder_name = '_opcode_' + str(cmd) + '_decode'
     try:
         if not callable(globals()[decoder_name]):
             raise ValueError
@@ -365,6 +482,8 @@ def message_decode(msg):
         _unknown_decode(msg)
         return
     globals()[decoder_name](msg)
+
+
 #
 #
 # def al_encode(arm_mode, area, user_code):

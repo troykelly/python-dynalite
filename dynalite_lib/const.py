@@ -45,6 +45,7 @@ class OpcodeType(Enum):
     REPORT_PRESET = 98
     REQUEST_PRESET = 99
     PRESET_OFFSET = 100
+    LINEAR_PRESET = 101
     SAVE_CURRENT_PRESET = 102
     RESTORE_CURRENT_PRESET = 103
     TURN_ALL_AREAS_OFF = 104
@@ -64,6 +65,10 @@ class PanelLightingType(Enum):
     INDICATOR = 1
     BACKLIGHT = 2
 
+class TextDescriptions(Enum):
+    """Types of description strings that can be retrieved from the panel"""
+    AREA = (1, Max.AREAS.value)
+    PRESET = (2, Max.PRESETS.value)
 
 # Map to convert message code to descriptive string
 MESSAGE_MAP = {
@@ -100,6 +105,7 @@ MESSAGE_MAP = {
     98: 'Report area preset',
     99: 'Request area preset',
     100: 'Preset offset',
+    101: 'Linear preset',
     102: 'Save current preset',
     103: 'Restore current preset',
     104: 'Turn all areas off',
