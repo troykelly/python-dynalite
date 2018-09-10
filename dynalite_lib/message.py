@@ -44,12 +44,21 @@ def preset_to_opcodebank(preset):
     return bytearray([opcode, bank])
 
 
-def opcodebank_to_preset(opcodebank):
-    opcode = opcodebank[0]
-    bank = opcodebank[1]
+def opcodebank_to_preset(opcode, bank):
     if opcode > 3:
         opcode = opcode - 6
     return (opcode + (bank * 8)) + 1
+
+def fadeLowHigh256_to_seconds(fadeLow, fadeHigh):
+    return (fadeLow + (fadeHigh * 256)) * 0.02
+
+def preset_opcode(msg):
+    opcode = get_dynet_command(msg)
+    data = get_dynet_data(msg)
+    area = get_dynet_area(msg)
+    preset = opcodebank_to_preset(opcode, data[2])
+    fade = fadeLowHigh256_to_seconds(data[0], data[1])
+    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
 
 def get_dynet_sync(msg):
     """Return the sync code in the message."""
@@ -106,90 +115,57 @@ class call_handlers():  # pylint: disable=invalid-name,too-few-public-methods
 @call_handlers(0)
 def _opcode_0_decode(msg):
     """0: First preset in bank."""
-    opcode = get_dynet_command(msg)
-    data = get_dynet_data(msg)
-    area = get_dynet_area(msg)
-    preset = (opcode + (data[2] * 8)) + 1
-    fade = (data[0] + (data[1] * 256)) * 0.02
-    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
-    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+    data = preset_opcode(msg)
+    print(data)
+    return data
 
 @call_handlers(1)
 def _opcode_1_decode(msg):
     """3: Second preset in bank."""
-    opcode = get_dynet_command(msg)
-    data = get_dynet_data(msg)
-    area = get_dynet_area(msg)
-    preset = (opcode + (data[2] * 8)) + 1
-    fade = (data[0] + (data[1] * 256)) * 0.02
-    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
-    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+    data = preset_opcode(msg)
+    print(data)
+    return data
 
 @call_handlers(2)
 def _opcode_2_decode(msg):
     """0: Third preset in bank."""
-    opcode = get_dynet_command(msg)
-    data = get_dynet_data(msg)
-    area = get_dynet_area(msg)
-    preset = (opcode + (data[2] * 8)) + 1
-    fade = (data[0] + (data[1] * 256)) * 0.02
-    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
-    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+    data = preset_opcode(msg)
+    print(data)
+    return data
 
 @call_handlers(3)
 def _opcode_3_decode(msg):
     """3: Forth preset in bank."""
-    opcode = get_dynet_command(msg)
-    data = get_dynet_data(msg)
-    area = get_dynet_area(msg)
-    preset = (opcode + (data[2] * 8)) + 1
-    fade = (data[0] + (data[1] * 256)) * 0.02
-    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
-    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+    data = preset_opcode(msg)
+    print(data)
+    return data
 
 @call_handlers(10)
 def _opcode_10_decode(msg):
     """0: Fifth preset in bank."""
-    opcode = get_dynet_command(msg)
-    data = get_dynet_data(msg)
-    area = get_dynet_area(msg)
-    preset = ((opcode - 6) + (data[2] * 8)) + 1
-    fade = (data[0] + (data[1] * 256)) * 0.02
-    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
-    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+    data = preset_opcode(msg)
+    print(data)
+    return data
 
 @call_handlers(11)
 def _opcode_11_decode(msg):
     """3: Sixth preset in bank."""
-    opcode = get_dynet_command(msg)
-    data = get_dynet_data(msg)
-    area = get_dynet_area(msg)
-    preset = ((opcode - 6) + (data[2] * 8)) + 1
-    fade = (data[0] + (data[1] * 256)) * 0.02
-    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
-    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+    data = preset_opcode(msg)
+    print(data)
+    return data
 
 @call_handlers(12)
 def _opcode_12_decode(msg):
     """0: Seventh preset in bank."""
-    opcode = get_dynet_command(msg)
-    data = get_dynet_data(msg)
-    area = get_dynet_area(msg)
-    preset = ((opcode - 6) + (data[2] * 8)) + 1
-    fade = (data[0] + (data[1] * 256)) * 0.02
-    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
-    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+    data = preset_opcode(msg)
+    print(data)
+    return data
 
 @call_handlers(13)
 def _opcode_13_decode(msg):
-    """3: Eigth preset in bank."""
-    opcode = get_dynet_command(msg)
-    data = get_dynet_data(msg)
-    area = get_dynet_area(msg)
-    preset = ((opcode - 6) + (data[2] * 8)) + 1
-    fade = (data[0] + (data[1] * 256)) * 0.02
-    print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
-    return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
+    data = preset_opcode(msg)
+    print(data)
+    return data
 
 @call_handlers(101)
 def _opcode_101_decode(msg):
@@ -198,7 +174,7 @@ def _opcode_101_decode(msg):
     data = get_dynet_data(msg)
     area = get_dynet_area(msg)
     preset = data[0] + 1
-    fade = (data[1] + (data[2] * 256)) * 0.02
+    fade = fadeLowHigh256_to_seconds(data[0], data[1])
     print({'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)})
     return {'area': area, 'preset': preset, 'fade': fade, 'join': get_dynet_join(msg)}
 
