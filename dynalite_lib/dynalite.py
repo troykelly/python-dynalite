@@ -269,13 +269,14 @@ class Dynalite(object):
             areaFade = self._config.area[areaValue]['fade'] if 'fade' in self._config.area[areaValue] else None
             if areaFade is None:
                 areaFade = self._config.default['fade'] if 'fade' in self._config.default else 2
+            areaFade = float(areaFade)
             if 'nodefault' in self._config.area[areaValue] and self._config.area[areaValue]['nodefault'] == True:
                 defaultPresets = None
             else:
                 defaultPresets = self._config.preset
 
             self._logger.debug(
-                "Generating Area '%d/%s' with a default fade of %d" % (int(areaValue), areaName, areaFade))
+                "Generating Area '%d/%s' with a default fade of %f" % (int(areaValue), areaName, areaFade))
             self.devices['area'][int(areaValue)] = DynaliteArea(
                 name=areaName, value=areaValue, fade=areaFade, areaPresets=areaPresets, defaultPresets=defaultPresets, logger=self._logger, broadcastFunction=self.broadcast, dynetControl=self.control)
         self._configured = True
