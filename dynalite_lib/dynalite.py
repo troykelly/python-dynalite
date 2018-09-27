@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 @ Author      : Troy Kelly
 @ Date        : 23 Sept 2018
@@ -12,6 +9,7 @@
 import asyncio
 import logging
 import json
+from .dynet import Dynet, DynetControl
 
 
 class BroadcasterError(Exception):
@@ -69,89 +67,123 @@ class Broadcaster(object):
     def monitorEvent(self, eventType=None):
         if eventType is None:
             raise BroadcasterError("Must supply an event type to monitor")
+        eventType = eventType.upper()
         if eventType not in self._monitoredEvents:
             self._monitoredEvents.append(eventType.upper())
 
     def unmonitorEvent(self, eventType=None):
         if eventType is None:
             raise BroadcasterError("Must supply an event type to un-monitor")
+        eventType = eventType.upper()
         if eventType in self._monitoredEvents:
             self._monitoredEvents.remove(eventType.upper())
 
-    def update(self, event=None):
+    def update(self, event=None, dynalite=None):
         if event is None:
             return
         if event.eventType not in self._monitoredEvents and '*' not in self._monitoredEvents:
             return
         if self._loop:
-            self._loop.create_task(self._callUpdater(event=event))
+            self._loop.create_task(self._callUpdater(
+                event=event, dynalite=dynalite))
         else:
-            self._listenerFunction(event)
+            self._listenerFunction(event=event, dynalite=dynalite)
 
     @asyncio.coroutine
-    def _callUpdater(self, event=None):
-        self._listenerFunction(event)
+    def _callUpdater(self, event=None, dynalite=None):
+        self._listenerFunction(event=event, dynalite=dynalite)
 
 
 class DynalitePreset(object):
 
-    def __init__(self, name=None, value=None, fade=2, logger=None, broadcastFunction=None):
+    def __init__(self, name=None, value=None, fade=2, logger=None, broadcastFunction=None, area=None, dynetControl=None):
         if not value:
             raise PresetError("A preset must have a value")
         self._logger = logger
         self.active = False
         self.name = name if name else "Preset " + str(value)
-        self.value = value
-        self.fade = fade
+        self.value = int(value)
+        self.fade = float(fade)
+        self.area = area
+        self.broadcastFunction = broadcastFunction
+        self._control = dynetControl
+        if self.broadcastFunction:
+            broadcastData = {
+                'area': self.area.value,
+                'preset': self.value,
+                'name': self.area.name + ' ' + self.name,
+                'state': 'OFF'
+            }
+            self.broadcastFunction(
+                Event(eventType='newpreset', data=broadcastData))
+
+    def turnOn(self, send=True):
+        self.active = True
+        if self.broadcastFunction:
+            broadcastData = {
+                'area': self.area.value,
+                'preset': self.value,
+                'name': self.area.name + ' ' + self.name,
+                'state': 'ON'
+            }
+            self.broadcastFunction(
+                Event(eventType='preset', data=broadcastData))
+        if send and self._control:
+            self._control.areaPreset(
+                area=self.area.value, preset=self.value, fade=self.fade)
+        for preset in self.area.preset:
+            if self.value != preset:
+                if self.area.preset[preset].active:
+                    self.area.preset[preset].turnOff(send=False)
+
+    def turnOff(self, send=True):
+        self.active = False
+        if self.broadcastFunction:
+            broadcastData = {
+                'area': self.area.value,
+                'preset': self.value,
+                'name': self.area.name + ' ' + self.name,
+                'state': 'OFF'
+            }
+            self.broadcastFunction(
+                Event(eventType='preset', data=broadcastData))
+        if send and self._control:
+            self._control.areaOff(area=self.area.value, fade=self.fade)
 
 
 class DynaliteArea(object):
 
-    def __init__(self, name=None, value=None, fade=2, areaPresets=None, defaultPresets=None, logger=None, broadcastFunction=None):
+    def __init__(self, name=None, value=None, fade=2, areaPresets=None, defaultPresets=None, logger=None, broadcastFunction=None, dynetControl=None):
         if not value:
             raise PresetError("An area must have a value")
         self._logger = logger
         self.name = name if name else "Area " + str(value)
-        self.value = value
+        self.value = int(value)
         self.fade = fade
         self.preset = {}
+        self.broadcastFunction = broadcastFunction
+        self._dynetControl = dynetControl
         if areaPresets:
             for presetValue in areaPresets:
                 preset = areaPresets[presetValue]
                 presetName = preset['name'] if 'name' in preset else None
                 presetFade = preset['fade'] if 'fade' in preset else fade
-                self._logger.debug("Area '%s' - Creating '%d/%s' (Fade %d)" %
-                                   (self.name, int(presetValue), presetName, presetFade))
                 self.preset[int(presetValue)] = DynalitePreset(
-                    name=presetName, value=presetValue, fade=presetFade, logger=self._logger, broadcastFunction=broadcastFunction)
-                if broadcastFunction:
-                    broadcastData = {
-                        'area': self.value,
-                        'preset': presetValue,
-                        'name': self.name + ' ' + presetName,
-                        'state': 'OFF'
-                    }
-                    broadcastFunction(
-                        Event(eventType='newpreset', data=broadcastData))
+                    name=presetName, value=presetValue, fade=presetFade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
         if defaultPresets:
             for presetValue in defaultPresets:
                 if int(presetValue) not in self.preset:
                     preset = defaultPresets[presetValue]
                     presetName = preset['name'] if preset['name'] else None
                     presetFade = preset['fade'] if preset['fade'] else fade
-                    self._logger.debug("Area '%s' - Creating '%d/%s' (Fade %d)" %
-                                       (self.name, int(presetValue), presetName, presetFade))
                     self.preset[int(presetValue)] = DynalitePreset(
-                        name=presetName, value=presetValue, fade=presetFade, logger=self._logger, broadcastFunction=broadcastFunction)
-                    if broadcastFunction:
-                        broadcastData = {
-                            'area': self.value,
-                            'preset': presetValue,
-                            'name': self.name + ' ' + presetName,
-                            'state': 'OFF'
-                        }
-                        broadcastFunction(
-                            Event(eventType='newpreset', data=broadcastData))
+                        name=presetName, value=presetValue, fade=presetFade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
+
+    def presetOn(self, preset, send=True):
+        if preset not in self.preset:
+            self.preset[preset] = DynalitePreset(
+                value=preset, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
+        self.preset[preset].turnOn(send=send)
 
 
 class Dynalite(object):
@@ -163,14 +195,58 @@ class Dynalite(object):
         logging.basicConfig(level=self._config.log_level,
                             format=self._config.log_formatter)
 
+        self._configured = False
+
         self._listeners = []
 
-        self._devices = {
+        self.devices = {
             'area': {}
         }
 
+        self._dynet = None
+        self.control = None
+
     def start(self):
         self.loop.create_task(self._start())
+
+    def connect(self):
+        self.loop.create_task(self._connect())
+
+    def processTraffic(self, event):
+        self.loop.create_task(self._processTraffic(event))
+
+    @asyncio.coroutine
+    def _processTraffic(self, event):
+        if event.eventType == 'AREAPRESET':
+            self.devices['area'][event.data['area']
+                                 ].presetOn(event.data['preset'],send=False)
+        else:
+            broadcastData = {
+                'area': event.data['area'],
+                'namename': self.devices['area'][event.data['area']].name,
+                'data': event.data.toJson()
+            }
+            self.broadcast(
+                Event(eventType='unknown', data=broadcastData))
+
+    @asyncio.coroutine
+    def _connect(self):
+        self._dynet = Dynet(host=self._config.host, port=self._config.port,
+                            loop=self.loop, broadcaster=self.processTraffic, onConnect=self._connected, onDisconnect=self._disconnection)
+        self._dynet.connect()
+
+    @asyncio.coroutine
+    def _connected(self, dynet=None, transport=None):
+        self.control = DynetControl(
+            dynet, self.loop, areaDefinition=self.devices['area'])
+        if not self._configured:
+            self.loop.create_task(self._configure())
+        self.broadcast(Event(eventType='connected', data={}))
+
+    @asyncio.coroutine
+    def _disconnection(self, dynet=None):
+        self.control = None
+        self.broadcast(Event(eventType='disconnected', data={}))
 
     def broadcast(self, event):
         self.loop.create_task(self._broadcast(event))
@@ -178,10 +254,14 @@ class Dynalite(object):
     @asyncio.coroutine
     def _broadcast(self, event):
         for listenerFunction in self._listeners:
-            listenerFunction.update(event)
+            listenerFunction.update(event=event, dynalite=self)
 
     @asyncio.coroutine
     def _start(self):
+        self.connect()
+
+    @asyncio.coroutine
+    def _configure(self):
         for areaValue in self._config.area:
             areaName = self._config.area[areaValue]['name'] if 'name' in self._config.area[areaValue] else None
             areaPresets = self._config.area[areaValue]['preset'] if 'preset' in self._config.area[areaValue] else {
@@ -196,8 +276,9 @@ class Dynalite(object):
 
             self._logger.debug(
                 "Generating Area '%d/%s' with a default fade of %d" % (int(areaValue), areaName, areaFade))
-            self._devices['area'][int(areaValue)] = DynaliteArea(
-                name=areaName, value=areaValue, fade=areaFade, areaPresets=areaPresets, defaultPresets=defaultPresets, logger=self._logger, broadcastFunction=self.broadcast)
+            self.devices['area'][int(areaValue)] = DynaliteArea(
+                name=areaName, value=areaValue, fade=areaFade, areaPresets=areaPresets, defaultPresets=defaultPresets, logger=self._logger, broadcastFunction=self.broadcast, dynetControl=self.control)
+        self._configured = True
 
     def addListener(self, listenerFunction=None):
         broadcaster = Broadcaster(

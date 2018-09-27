@@ -11,11 +11,17 @@ LOG = logging.getLogger(__name__)
 OPTIONS_FILE = 'test/options.json'
 
 loop = asyncio.get_event_loop()
+dynalite = None
 
 
-def handleEvent(event):
-    LOG.info("Received Event: %s" % event.eventType)
+def handleEvent(event=None, dynalite=None):
+    #LOG.info("Received Event: %s" % event.eventType)
     LOG.debug(event.toJson())
+
+
+def handleConnect(event=None, dynalite=None):
+    LOG.warning("Connected to Dynalite")
+    dynalite.devices['area'][2].preset[1].turnOn()
 
 
 if __name__ == '__main__':
@@ -26,6 +32,9 @@ if __name__ == '__main__':
 
     bcstr = dynalite.addListener(listenerFunction=handleEvent)
     bcstr.monitorEvent('*')
+
+    onConnect = dynalite.addListener(listenerFunction=handleConnect)
+    onConnect.monitorEvent('CONNECTED')
 
     dynalite.start()
     loop.run_forever()
