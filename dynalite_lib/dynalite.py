@@ -119,6 +119,8 @@ class DynalitePreset(object):
 
     def turnOn(self, send=True):
         self.active = True
+        if self.area:
+            self.area.activePreset = self.value
         if self.broadcastFunction:
             broadcastData = {
                 'area': self.area.value,
@@ -161,6 +163,7 @@ class DynaliteArea(object):
         self.value = int(value)
         self.fade = fade
         self.preset = {}
+        self.activePreset = None
         self.broadcastFunction = broadcastFunction
         self._dynetControl = dynetControl
         if areaPresets:
@@ -280,6 +283,29 @@ class Dynalite(object):
             self.devices['area'][int(areaValue)] = DynaliteArea(
                 name=areaName, value=areaValue, fade=areaFade, areaPresets=areaPresets, defaultPresets=defaultPresets, logger=self._logger, broadcastFunction=self.broadcast, dynetControl=self.control)
         self._configured = True
+
+    def state(self):
+        self.loop.create_task(self._state())
+
+    @asyncio.coroutine
+    def _state(self):
+        for areaValue in self.devices['area']:
+            area = self.devices['area'][areaValue]
+            for presetValue in area:
+                preset = area.preset[presetValue]
+                presetState = 'ON' if preset.active else 'OFF'
+                broadcastData = {
+                    'area': area.value,
+                    'preset': preset.value,
+                    'name': area.name + ' ' + preset.name,
+                    'state': presetState
+                }
+                self.broadcast(
+                    Event(eventType='newpreset', data=broadcastData))
+                if preset.active:
+                    self.broadcastFunction(
+                        Event(eventType='preset', data=broadcastData))
+
 
     def addListener(self, listenerFunction=None):
         broadcaster = Broadcaster(
