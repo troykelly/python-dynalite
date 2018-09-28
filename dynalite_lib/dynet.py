@@ -9,6 +9,7 @@
 import asyncio
 import logging
 import json
+import time
 from .const import OpcodeType
 from .inbound import DynetInbound
 
@@ -194,7 +195,8 @@ class DynetControl(object):
     @asyncio.coroutine
     def _areaReqPreset(self, area):
         packet = DynetPacket()
-        packet.toMsg(sync=28, area=area, command=OpcodeType.REQUEST_PRESET.value, data=[0, 0, 0], join=255)
+        packet.toMsg(sync=28, area=area, command=OpcodeType.REQUEST_PRESET.value, data=[
+                     0, 0, 0], join=255)
         self._dynet.write(packet)
 
 
@@ -220,6 +222,9 @@ class Dynet(object):
         self._outBuffer = []
         self._timeout = 30
 
+        self._lastSent = None
+        self._messageDelay = 200
+        self._sending = False
 
     def cleanup(self):
         self._connection_retry_timer = 1
@@ -253,10 +258,12 @@ class Dynet(object):
         if hasattr(packet, 'opcodeType'):
             inboundHandler = DynetInbound()
             if hasattr(inboundHandler, packet.opcodeType.lower()):
-                event = getattr(inboundHandler, packet.opcodeType.lower())(packet)
+                event = getattr(
+                    inboundHandler, packet.opcodeType.lower())(packet)
                 self.broadcast(event)
             else:
-                LOG.debug("Unhandled Dynet Inbound (%s): %s" % (packet.opcodeType, packet))
+                LOG.debug("Unhandled Dynet Inbound (%s): %s" %
+                          (packet.opcodeType, packet))
         else:
             LOG.debug("Unhandled Dynet Inbound: %s" % packet)
 
@@ -306,24 +313,43 @@ class Dynet(object):
         if newPacket is not None:
             self._outBuffer.append(newPacket)
 
-        if self._paused:
-            LOG.info("Connection paused - queuing packet")
-            self._loop.call_later(1, self.updateLocations)
+        if self._paused or self._sending:
+            LOG.info("Connection busy - queuing packet")
+            self._loop.call_later(1, self.write)
+            return
 
-        for idx, packet in enumerate(self._outBuffer):
-            msg = bytearray()
-            msg.append(packet.sync)
-            msg.append(packet.area)
-            msg.append(packet.data[0])
-            msg.append(packet.command)
-            msg.append(packet.data[1])
-            msg.append(packet.data[2])
-            msg.append(packet.join)
-            msg.append(packet.chk)
-            try:
-                self._transport.write(msg)
-                LOG.debug("Dynet Sent: %s" % msg)
-            except:
-                self._logger.error("Unable to write data: %s" % msg)
-            del self._outBuffer[idx]
-            # self._loop.create_task(self._receive(msg))
+        if self._lastSent is None:
+            self._lastSent = int(round(time.time() * 1000))
+
+        current_milli_time = int(round(time.time() * 1000))
+        elapsed = (current_milli_time - self._lastSent)
+        delay = (0 - (elapsed - self._messageDelay))
+        if delay > 0:
+            self._loop.call_later(delay / 1000, self.write)
+            return
+
+        if len(self._outBuffer) == 0:
+            return
+
+        self._sending = True
+        packet = self._outBuffer[0]
+        msg = bytearray()
+        msg.append(packet.sync)
+        msg.append(packet.area)
+        msg.append(packet.data[0])
+        msg.append(packet.command)
+        msg.append(packet.data[1])
+        msg.append(packet.data[2])
+        msg.append(packet.join)
+        msg.append(packet.chk)
+        try:
+            self._transport.write(msg)
+            LOG.debug("Dynet Sent: %s" % msg)
+        except:
+            self._logger.error("Unable to write data: %s" % msg)
+        del self._outBuffer[0]
+        self._lastSent = int(round(time.time() * 1000))
+        self._sending = False
+
+        if len(self._outBuffer) > 0:
+            self._loop.call_later(self._messageDelay / 1000, self.write)
