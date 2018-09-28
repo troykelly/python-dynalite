@@ -291,7 +291,7 @@ class Dynalite(object):
     def _state(self):
         for areaValue in self.devices['area']:
             area = self.devices['area'][areaValue]
-            for presetValue in area:
+            for presetValue in area.preset:
                 preset = area.preset[presetValue]
                 presetState = 'ON' if preset.active else 'OFF'
                 broadcastData = {
