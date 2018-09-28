@@ -11,7 +11,6 @@ import logging
 import json
 from .dynet import Dynet, DynetControl
 
-
 class BroadcasterError(Exception):
     def __init__(self, message):
         self.message = message
@@ -188,6 +187,11 @@ class DynaliteArea(object):
                 value=preset, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
         self.preset[preset].turnOn(send=send)
 
+    def presetOff(self, preset, send=True):
+        if preset not in self.preset:
+            self.preset[preset] = DynalitePreset(
+                value=preset, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
+        self.preset[preset].turnOff(send=send)
 
 class Dynalite(object):
 
@@ -220,17 +224,9 @@ class Dynalite(object):
 
     @asyncio.coroutine
     def _processTraffic(self, event):
-        if event.eventType == 'AREAPRESET':
-            self.devices['area'][event.data['area']
-                                 ].presetOn(event.data['preset'],send=False)
-        else:
-            broadcastData = {
-                'area': event.data['area'],
-                'namename': self.devices['area'][event.data['area']].name,
-                'data': event.data.toJson()
-            }
-            self.broadcast(
-                Event(eventType='unknown', data=broadcastData))
+        if event.eventType == 'PRESET':
+            self.devices['area'][event.data['area']].presetOn(event.data['preset'],send=False)
+        self.broadcast(event)
 
     @asyncio.coroutine
     def _connect(self):
