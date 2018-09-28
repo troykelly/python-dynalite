@@ -301,6 +301,7 @@ class Dynalite(object):
                 if preset.active:
                     self.broadcastFunction(
                         Event(eventType='preset', data=broadcastData))
+            self.control.areaReqPreset(area.value)
 
 
     def addListener(self, listenerFunction=None):

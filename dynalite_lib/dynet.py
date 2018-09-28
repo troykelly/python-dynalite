@@ -188,6 +188,15 @@ class DynetControl(object):
                      255, 0, int(fade * 10)], join=255)
         self._dynet.write(packet)
 
+    def areaReqPreset(self, area):
+        self._loop.create_task(self._areaReqPreset(area=area))
+
+    @asyncio.coroutine
+    def _areaReqPreset(self, area):
+        packet = DynetPacket()
+        packet.toMsg(sync=28, area=area, command=OpcodeType.REPORT_PRESET.value, data=[0, 0, 0], join=255)
+        self._dynet.write(packet)
+
 
 class Dynet(object):
 
