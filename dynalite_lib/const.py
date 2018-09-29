@@ -6,6 +6,15 @@
 
 from enum import Enum
 
+class SyncType(Enum):
+    """Types of Sync Code"""
+    LOGICAL = 28
+    DEVICE = 92
+
+    @classmethod
+    def has_value(cls, value):
+        return any(value == item.value for item in cls)
+
 
 class OpcodeType(Enum):
     """Types of Dyney Opcodes"""
@@ -77,3 +86,7 @@ class OpcodeType(Enum):
     START_FADING_ALL = 121
     STOP_FADING_ALL = 122
     PROGRAM_TOGGLE_PRESET = 125
+
+    @classmethod
+    def has_value(cls, value):
+        return any(value == item.value for item in cls)

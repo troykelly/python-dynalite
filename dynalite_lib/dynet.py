@@ -10,7 +10,7 @@ import asyncio
 import logging
 import json
 import time
-from .const import OpcodeType
+from .const import OpcodeType, SyncType
 from .inbound import DynetInbound
 
 LOG = logging.getLogger(__name__)
@@ -52,15 +52,15 @@ class DynetPacket(object):
         self.fromMsg(bytes)
 
     def fromMsg(self, msg):
-        bytes = []
-        for byte in msg:
-            bytes.append(int(byte))
-        self._msg = bytes
-        if(len(self._msg) > 8):
-            self.excess = self._msg[:8]
-            self._msg = self._msg[8:]
-        if self.calcsum(self._msg) != self._msg[7]:
-            raise PacketError("Failed checksum %s" % self._msg)
+        messageLength = len(msg)
+        if messageLength < 8:
+            raise PacketError("Message too short (%d bytes): %s" % (len(msg), msg))
+
+        if messageLength > 8:
+            raise PacketError("Message too long (%d bytes): %s" % (len(msg), msg))
+
+        self._msg = msg
+
         self.sync = self._msg[0]
         self.area = self._msg[1]
         self.data = [self._msg[2], self._msg[4], self._msg[5]]
@@ -68,7 +68,8 @@ class DynetPacket(object):
         self.join = self._msg[6]
         self.chk = self._msg[7]
         if self.sync == 28:
-            self.opcodeType = OpcodeType(self.command).name
+            if OpcodeType.has_value(self.command):
+                self.opcodeType = OpcodeType(self.command).name
 
     def toJson(self):
         return json.dumps(self.__dict__)
@@ -247,15 +248,37 @@ class Dynet(object):
                 self._connection_retry_timer if self._connection_retry_timer < 32 else 60
 
     @asyncio.coroutine
-    def _receive(self, data):
-        try:
-            packet = DynetPacket(data)
-        except PacketError as err:
-            LOG.error(err)
-            LOG.info(packet)
-        if hasattr(packet, 'excess'):
-            self._loop.create_task(self._receive(packet.excess))
-        if hasattr(packet, 'opcodeType'):
+    def _receive(self, data=None):
+        if data is not None:
+            for byte in data:
+                self._inBuffer.append(int(byte))
+
+        inBufferLength = len(self._inBuffer)
+        if inBufferLength < 8:
+            LOG.debug("Received %d bytes, not enough to process: %s" %(inBufferLength,self._inBuffer))
+
+        packet = None
+        while inBufferLength >= 8 and packet is None:
+            if SyncType.has_value(self._inBuffer[0]):
+                try:
+                    packet = DynetPacket(msg=self._inBuffer[:8])
+                except PacketError as err:
+                    LOG.error(err)
+                    packet = None
+            if packet is None:
+                del self._inBuffer[0]
+                inBufferLength = len(self._inBuffer)
+            else:
+                self._inBuffer = self._inBuffer[8:]
+                inBufferLength = len(self._inBuffer)
+
+        if packet is None:
+            LOG.debug("Unable to find message in buffer")
+            return
+        else:
+            LOG.debug("Have packet: %s" % packet)
+
+        if hasattr(packet, 'opcodeType') and packet.opcodeType is not None:
             inboundHandler = DynetInbound()
             if hasattr(inboundHandler, packet.opcodeType.lower()):
                 event = getattr(
@@ -266,6 +289,9 @@ class Dynet(object):
                           (packet.opcodeType, packet))
         else:
             LOG.debug("Unhandled Dynet Inbound: %s" % packet)
+        # If there is still buffer to process - start again
+        if inBufferLength >= 8:
+            self._loop.create_task(self._receive())
 
     @asyncio.coroutine
     def _pause(self):
