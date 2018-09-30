@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="dynalite",
-    version="0.1.10",
+    version="0.1.12",
     author="Troy Kelly",
     author_email="troy@troykelly.com",
     description="An unofficial Dynalite DyNET interface",

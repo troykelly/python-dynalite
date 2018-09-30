@@ -116,11 +116,11 @@ class DynalitePreset(object):
             self.broadcastFunction(
                 Event(eventType='newpreset', data=broadcastData))
 
-    def turnOn(self, send=True):
+    def turnOn(self, sendDynet=True, sendMQTT=True):
         self.active = True
         if self.area:
             self.area.activePreset = self.value
-        if self.broadcastFunction:
+        if sendMQTT and self.broadcastFunction:
             broadcastData = {
                 'area': self.area.value,
                 'preset': self.value,
@@ -129,17 +129,17 @@ class DynalitePreset(object):
             }
             self.broadcastFunction(
                 Event(eventType='preset', data=broadcastData))
-        if send and self._control:
+        if sendDynet and self._control:
             self._control.areaPreset(
                 area=self.area.value, preset=self.value, fade=self.fade)
         for preset in self.area.preset:
             if self.value != preset:
                 if self.area.preset[preset].active:
-                    self.area.preset[preset].turnOff(send=False)
+                    self.area.preset[preset].turnOff(sendDynet=False, sendMQTT=True)
 
-    def turnOff(self, send=True):
+    def turnOff(self, sendDynet=True, sendMQTT=True):
         self.active = False
-        if self.broadcastFunction:
+        if sendMQTT and self.broadcastFunction:
             broadcastData = {
                 'area': self.area.value,
                 'preset': self.value,
@@ -148,7 +148,7 @@ class DynalitePreset(object):
             }
             self.broadcastFunction(
                 Event(eventType='preset', data=broadcastData))
-        if send and self._control:
+        if sendDynet and self._control:
             self._control.areaOff(area=self.area.value, fade=self.fade)
 
 
@@ -181,17 +181,17 @@ class DynaliteArea(object):
                     self.preset[int(presetValue)] = DynalitePreset(
                         name=presetName, value=presetValue, fade=presetFade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
 
-    def presetOn(self, preset, send=True):
+    def presetOn(self, preset, sendDynet=True, sendMQTT=True):
         if preset not in self.preset:
             self.preset[preset] = DynalitePreset(
                 value=preset, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
-        self.preset[preset].turnOn(send=send)
+        self.preset[preset].turnOn(sendDynet=sendDynet, sendMQTT=sendMQTT)
 
-    def presetOff(self, preset, send=True):
+    def presetOff(self, preset, sendDynet=True, sendMQTT=True):
         if preset not in self.preset:
             self.preset[preset] = DynalitePreset(
                 value=preset, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
-        self.preset[preset].turnOff(send=send)
+        self.preset[preset].turnOff(sendDynet=sendDynet, sendMQTT=sendMQTT)
 
 class Dynalite(object):
 
@@ -224,9 +224,9 @@ class Dynalite(object):
 
     @asyncio.coroutine
     def _processTraffic(self, event):
-        if event.eventType == 'PRESET':
-            self.devices['area'][event.data['area']].presetOn(event.data['preset'],send=False)
         self.broadcast(event)
+        if event.eventType == 'PRESET':
+            self.devices['area'][event.data['area']].presetOn(event.data['preset'],sendDynet=False, sendMQTT=False)
 
     @asyncio.coroutine
     def _connect(self):

@@ -8,6 +8,7 @@
 
 import json
 
+
 class DynetEvent(object):
 
     def __init__(self, eventType=None, message=None, data={}, direction=None):
@@ -35,7 +36,7 @@ class DynetInbound(object):
             packet.preset = packet.command
         packet.preset = (packet.preset + (packet.data[2] * 8)) + 1
         packet.fade = (packet.data[0] + (packet.data[1] * 256)) * 0.02
-        return DynetEvent(eventType='PRESET', message=("Area %d Preset %d Fade %d seconds." % (packet.area, packet.preset, packet.fade)), data={'area': packet.area, 'preset': packet.preset, 'fade': packet.fade, 'join': packet.join}, direction="IN")
+        return DynetEvent(eventType='PRESET', message=("Area %d Preset %d Fade %d seconds." % (packet.area, packet.preset, packet.fade)), data={'area': packet.area, 'preset': packet.preset, 'fade': packet.fade, 'join': packet.join, 'state': 'ON'}, direction="IN")
 
     def preset_1(self, packet):
         return self.preset(packet)
@@ -66,10 +67,9 @@ class DynetInbound(object):
 
     def report_preset(self, packet):
         packet.preset = packet.data[0] + 1
-        # packet.fade = (packet.data[1] + (packet.data[2] * 256)) * 0.02
-        return DynetEvent(eventType='PRESET', message=("Current Area %d Preset is %d" % (packet.area, packet.preset)), data={'area': packet.area, 'preset': packet.preset, 'join': packet.join}, direction="IN")
+        return DynetEvent(eventType='PRESET', message=("Current Area %d Preset is %d" % (packet.area, packet.preset)), data={'area': packet.area, 'preset': packet.preset, 'join': packet.join, 'state': 'ON'}, direction="IN")
 
     def linear_preset(self, packet):
         packet.preset = packet.data[0] + 1
         packet.fade = (packet.data[1] + (packet.data[2] * 256)) * 0.02
-        return DynetEvent(eventType='PRESET', message=("Area %d Preset %d Fade %d seconds." % (packet.area, packet.preset, packet.fade)), data={'area': packet.area, 'preset': packet.preset, 'fade': packet.fade, 'join': packet.join}, direction="IN")
+        return DynetEvent(eventType='PRESET', message=("Area %d Preset %d Fade %d seconds." % (packet.area, packet.preset, packet.fade)), data={'area': packet.area, 'preset': packet.preset, 'fade': packet.fade, 'join': packet.join, 'state': 'ON'}, direction="IN")
