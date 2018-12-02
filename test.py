@@ -13,14 +13,14 @@ OPTIONS_FILE = 'test/options.json'
 loop = asyncio.get_event_loop()
 dynalite = None
 
+
 def handleEvent(event=None, dynalite=None):
-    #LOG.info("Received Event: %s" % event.eventType)
     LOG.debug(event.toJson())
 
 
 def handleConnect(event=None, dynalite=None):
     LOG.info("Connected to Dynalite")
-    #dynalite.devices['area'][8].preset[10].turnOn()
+    # dynalite.devices['area'][8].preset[10].turnOn()
     dynalite.state()
 
 

@@ -1,6 +1,6 @@
 """
 @ Author      : Troy Kelly
-@ Date        : 23 Sept 2018
+@ Date        : 3 Dec 2018
 @ Description : Philips Dynalite Library - Unofficial interface for Philips Dynalite over RS485
 
 @ Notes:        Requires a RS485 to IP gateway (Do not use the Dynalite one - use something cheaper)
@@ -10,6 +10,7 @@ import asyncio
 import logging
 import json
 from .dynet import Dynet, DynetControl
+
 
 class BroadcasterError(Exception):
     def __init__(self, message):
@@ -135,7 +136,8 @@ class DynalitePreset(object):
         for preset in self.area.preset:
             if self.value != preset:
                 if self.area.preset[preset].active:
-                    self.area.preset[preset].turnOff(sendDynet=False, sendMQTT=True)
+                    self.area.preset[preset].turnOff(
+                        sendDynet=False, sendMQTT=True)
 
     def turnOff(self, sendDynet=True, sendMQTT=True):
         self.active = False
@@ -154,15 +156,33 @@ class DynalitePreset(object):
 
 class DynaliteArea(object):
 
-    def __init__(self, name=None, value=None, fade=2, areaPresets=None, defaultPresets=None, logger=None, broadcastFunction=None, dynetControl=None):
+    def __init__(self, name=None, value=None, fade=2, areaPresets=None, defaultPresets=None, areaType=None, onPreset=None, offPreset=None, logger=None, broadcastFunction=None, dynetControl=None):
         if not value:
             raise PresetError("An area must have a value")
         self._logger = logger
         self.name = name if name else "Area " + str(value)
+        self.type = areaType.lower() if areaType else 'light'
         self.value = int(value)
         self.fade = fade
         self.preset = {}
         self.activePreset = None
+        self.state = None
+
+        if self.type == 'cover':
+            self._onName = 'OPEN'
+            self._offName = 'CLOSED'
+            if onPreset is not None:
+                self.openPreset = onPreset
+            if offPreset is not None:
+                self.closePreset = offPreset
+        else:
+            self._onName = 'ON'
+            self._offName = 'OFF'
+            if onPreset is not None:
+                self.onPreset = onPreset
+            if offPreset is not None:
+                self.offPreset = offPreset
+
         self.broadcastFunction = broadcastFunction
         self._dynetControl = dynetControl
         if areaPresets:
@@ -182,6 +202,10 @@ class DynaliteArea(object):
                         name=presetName, value=presetValue, fade=presetFade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
 
     def presetOn(self, preset, sendDynet=True, sendMQTT=True):
+        if self.onPreset is not None and self.onPreset == preset:
+            self.state = self._onName
+        else:
+            self.state = self._offName
         if preset not in self.preset:
             self.preset[preset] = DynalitePreset(
                 value=preset, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
@@ -192,6 +216,7 @@ class DynaliteArea(object):
             self.preset[preset] = DynalitePreset(
                 value=preset, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
         self.preset[preset].turnOff(sendDynet=sendDynet, sendMQTT=sendMQTT)
+
 
 class Dynalite(object):
 
@@ -226,7 +251,8 @@ class Dynalite(object):
     def _processTraffic(self, event):
         self.broadcast(event)
         if event.eventType == 'PRESET':
-            self.devices['area'][event.data['area']].presetOn(event.data['preset'],sendDynet=False, sendMQTT=False)
+            self.devices['area'][event.data['area']].presetOn(
+                event.data['preset'], sendDynet=False, sendMQTT=False)
 
     @asyncio.coroutine
     def _connect(self):
@@ -302,7 +328,6 @@ class Dynalite(object):
                     self.broadcastFunction(
                         Event(eventType='preset', data=broadcastData))
             self.control.areaReqPreset(area.value)
-
 
     def addListener(self, listenerFunction=None):
         broadcaster = Broadcaster(
