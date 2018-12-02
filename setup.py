@@ -32,7 +32,7 @@ long_description = read('README.md')
 
 setup(
     name="dynalite",
-    version=find_version("src", "pip", "__init__.py"),
+    version=find_version("dynalite_lib", "__version__.py"),
     description="An unofficial Dynalite DyNET interface.",
     long_description=long_description,
 
