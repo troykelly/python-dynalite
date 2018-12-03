@@ -202,7 +202,7 @@ class DynaliteArea(object):
                         name=presetName, value=presetValue, fade=presetFade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
 
     def presetOn(self, preset, sendDynet=True, sendMQTT=True):
-        if self.onPreset is not None:
+        if 'onPreset' in self:
             if self.onPreset == preset:
                 self.state = self._onName
         else:
