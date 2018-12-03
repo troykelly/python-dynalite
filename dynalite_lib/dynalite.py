@@ -326,7 +326,7 @@ class Dynalite(object):
                 self.broadcast(
                     Event(eventType='newpreset', data=broadcastData))
                 if preset.active:
-                    self.broadcastFunction(
+                    self.broadcast(
                         Event(eventType='preset', data=broadcastData))
             self.control.areaReqPreset(area.value)
 
