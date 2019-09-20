@@ -10,6 +10,7 @@ class SyncType(Enum):
     """Types of Sync Code"""
     LOGICAL = 28
     DEVICE = 92
+    DEBUG_MSG = 0x6c
 
     @classmethod
     def has_value(cls, value):
@@ -17,7 +18,7 @@ class SyncType(Enum):
 
 
 class OpcodeType(Enum):
-    """Types of Dyney Opcodes"""
+    """Types of Dynet Opcodes"""
     PRESET_1 = 0
     PRESET_2 = 1
     PRESET_3 = 2
@@ -86,6 +87,10 @@ class OpcodeType(Enum):
     START_FADING_ALL = 121
     STOP_FADING_ALL = 122
     PROGRAM_TOGGLE_PRESET = 125
+    SET_CHANNEL_1_TO_LEVEL_WITH_FADE = 128
+    SET_CHANNEL_2_TO_LEVEL_WITH_FADE = 129
+    SET_CHANNEL_3_TO_LEVEL_WITH_FADE = 130
+    SET_CHANNEL_4_TO_LEVEL_WITH_FADE = 131
 
     @classmethod
     def has_value(cls, value):
