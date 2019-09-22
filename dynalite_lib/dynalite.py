@@ -57,7 +57,8 @@ class DynaliteConfig(object):
         self.preset = {}
         self.area = config['area'] if 'area' in config else {}
         self.preset = config['preset'] if 'preset' in config else {}
-        self.autodiscover = config['autodiscover'] if 'autodiscover' in config else {}
+        self.autodiscover = config['autodiscover'] if 'autodiscover' in config else True # autodiscover by default
+        self.polltimer = config['polltimer'] if 'polltimer' in config else 1 # default poll 1 sec
 
 
 class Broadcaster(object):
@@ -352,7 +353,7 @@ class Dynalite(object):
                     curArea.setChannelLevel( event.data['channel'], (255-event.data['actual_level']) / 254.0, self._autodiscover )
                     if event.data['actual_level'] != event.data['target_level']:
                         self._logger.debug("area=%s channel=%s actual_level=%s target_level=%s setting timer" % (event.data['area'], event.data['channel'], event.data['actual_level'], event.data['target_level']) )
-                        self.loop.call_later(5.0, curArea.requestChannelLevel, event.data['channel']) # XXX make the timer configurable
+                        self.loop.call_later(self._polltimer, curArea.requestChannelLevel, event.data['channel'])
                 elif event.data['action'] == 'cmd':
                     curArea.requestChannelLevel(event.data['channel'])
                 else:
@@ -398,6 +399,7 @@ class Dynalite(object):
     @asyncio.coroutine
     def _configure(self):
         self._autodiscover = self._config.autodiscover
+        self._polltimer = self._config.polltimer
         for areaValue in self._config.area:
             areaName = self._config.area[areaValue]['name'] if 'name' in self._config.area[areaValue] else None
             areaPresets = self._config.area[areaValue]['preset'] if 'preset' in self._config.area[areaValue] else {
