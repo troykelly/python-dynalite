@@ -231,7 +231,6 @@ class DynetControl(object):
 
     @asyncio.coroutine
     def _request_area_preset(self, area):
-        
         packet = DynetPacket()
         packet.toMsg(sync=28, area=area, command=OpcodeType.REQUEST_PRESET.value, data=[
                      0, 0, 0], join=255)
