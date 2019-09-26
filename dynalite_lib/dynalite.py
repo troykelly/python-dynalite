@@ -262,7 +262,7 @@ class DynaliteArea(object):
                     channel = areaChannels[channelValue]
                     name = channel['name'] if channel and ('name' in channel) else 'Channel ' + channelValue # XXX need to add channel specific fade
                     self.channel[int(channelValue)] = DynaliteChannel(name=name, value=channelValue, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
-                    self._logger.info("added area %s channel %s name %s" % (self.name, channelValue, name) )
+                    self._logger.debug("added area %s channel %s name %s" % (self.name, channelValue, name) )
                 else:
                     self._logger.error("illegal channel value area %s channel %s" % (self.name, channelValue))
         else:
