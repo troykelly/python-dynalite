@@ -11,7 +11,6 @@ import logging
 import json
 from .dynet import Dynet, DynetControl
 
-
 class BroadcasterError(Exception):
     def __init__(self, message):
         self.message = message
@@ -164,7 +163,7 @@ class DynalitePreset(object):
 class DynaliteChannel(object):
 
     def __init__(self, name=None, value=None, fade=2, logger=None, broadcastFunction=None, area=None, dynetControl=None):
-        logger.debug("DynaliteChannel init called area=%s channel=%s" % (area.value, value))
+        logger.debug("DynaliteChannel init called area=%s channel=%s fade=%s" % (area.value, value, fade))
         if not value:
             raise ChannelError("A channel must have a value")
         self._logger = logger
@@ -260,8 +259,9 @@ class DynaliteArea(object):
             for channelValue in areaChannels:
                 if (int(channelValue) >=1) and (int(channelValue)<=255):
                     channel = areaChannels[channelValue]
-                    name = channel['name'] if channel and ('name' in channel) else 'Channel ' + channelValue # XXX need to add channel specific fade
-                    self.channel[int(channelValue)] = DynaliteChannel(name=name, value=channelValue, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
+                    name = channel['name'] if channel and ('name' in channel) else 'Channel ' + channelValue
+                    fade = channel['fade'] if channel and ('fade' in channel) else self.fade # if no fade provided, use the fade of the area
+                    self.channel[int(channelValue)] = DynaliteChannel(name=name, value=channelValue, fade=fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
                     self._logger.debug("added area %s channel %s name %s" % (self.name, channelValue, name) )
                 else:
                     self._logger.error("illegal channel value area %s channel %s" % (self.name, channelValue))
