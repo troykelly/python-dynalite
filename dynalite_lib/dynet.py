@@ -10,7 +10,7 @@ import asyncio
 import logging
 import json
 import time
-from .const import OpcodeType, SyncType
+from .const import OpcodeType, SyncType, OpcodeType
 from .inbound import DynetInbound
 
 LOG = logging.getLogger(__name__)
@@ -176,6 +176,42 @@ class DynetControl(object):
                      data=[fadeLow, fadeHigh, bank], join=255)
         self._dynet.write(packet)
 
+    def setChannel(self, area, channel, level, fade=2):
+        self._loop.create_task(self._setChannel(
+            area=area, channel=channel, level=level, fade=fade))
+
+    @asyncio.coroutine
+    def _setChannel(self, area, channel, level, fade):
+        packet = DynetPacket()
+        channel_bank = 0xff if (channel <= 4) else ( int((channel-1) / 4) - 1)
+        target_level = int(255 - 254*level)
+        opcode = 0x80 + ( (channel-1) % 4 )
+        fade_time = int(fade / 0.02)
+        if (fade_time) > 0xff:
+            fade_time = 0xff
+        packet.toMsg(sync=28, area=area, command=opcode,
+                     data=[target_level, channel_bank, fade_time], join=255)
+        self._dynet.write(packet)
+        self.request_channel_level(area=area, channel=channel)
+
+    def request_channel_level(self, area, channel):
+        self._loop.create_task(self._request_channel_level(area=area, channel=channel))
+
+    @asyncio.coroutine
+    def _request_channel_level(self, area, channel):
+        packet = DynetPacket()
+        packet.toMsg(sync=28, area=area, command=OpcodeType.REQUEST_CHANNEL_LEVEL.value, data=[channel-1, 0, 0], join=255) 
+        self._dynet.write(packet)
+        
+    def stop_channel_fade(self, area, channel):
+        self._loop.create_task(self._stop_channel_fade(area=area, channel=channel))
+
+    @asyncio.coroutine
+    def _stop_channel_fade(self, area, channel):
+        packet = DynetPacket()
+        packet.toMsg(sync=28, area=area, command=OpcodeType.STOP_FADING.value, data=[channel-1, 0, 0], join=255) 
+        self._dynet.write(packet)
+        
     def areaOff(self, area, fade=2):
         self._loop.create_task(self._areaOff(area=area, fade=fade))
 
@@ -190,16 +226,15 @@ class DynetControl(object):
                      255, 0, int(fade * 10)], join=255)
         self._dynet.write(packet)
 
-    def areaReqPreset(self, area):
-        self._loop.create_task(self._areaReqPreset(area=area))
+    def request_area_preset(self, area):
+        self._loop.create_task(self._request_area_preset(area=area))
 
     @asyncio.coroutine
-    def _areaReqPreset(self, area):
+    def _request_area_preset(self, area):
         packet = DynetPacket()
         packet.toMsg(sync=28, area=area, command=OpcodeType.REQUEST_PRESET.value, data=[
                      0, 0, 0], join=255)
         self._dynet.write(packet)
-
 
 class Dynet(object):
 
@@ -253,44 +288,52 @@ class Dynet(object):
             for byte in data:
                 self._inBuffer.append(int(byte))
 
-        inBufferLength = len(self._inBuffer)
-        if inBufferLength < 8:
+        if len(self._inBuffer) < 8:
             LOG.debug("Received %d bytes, not enough to process: %s" %(inBufferLength,self._inBuffer))
 
         packet = None
-        while inBufferLength >= 8 and packet is None:
-            if SyncType.has_value(self._inBuffer[0]):
-                try:
-                    packet = DynetPacket(msg=self._inBuffer[:8])
-                except PacketError as err:
-                    LOG.error(err)
-                    packet = None
+        while len(self._inBuffer) >= 8 and packet is None:
+            firstByte = self._inBuffer[0]
+            if SyncType.has_value(firstByte):
+                if (firstByte == SyncType.DEBUG_MSG.value):
+                    bytemsg = "".join(chr(c) for c in self._inBuffer[1:7])
+                    LOG.debug("Dynet DEBUG message %s" % bytemsg)
+                    self._inBuffer = self._inBuffer[8:]
+                    continue
+                elif (firstByte == SyncType.DEVICE.value):
+                    LOG.debug("Not handling Dynet DEVICE message %s" % self._inBuffer[:8])
+                    self._inBuffer = self._inBuffer[8:]
+                    continue
+                elif (firstByte == SyncType.LOGICAL.value):
+                    try:
+                        packet = DynetPacket(msg=self._inBuffer[:8])
+                    except PacketError as err:
+                        LOG.error(err)
+                        packet = None
+                    
             if packet is None:
+                hexString = ":".join("{:02x}".format(ord(c)) for c in self._inBuffer[:8])
+                LOG.debug("Unable to process packet %s - moving one byte forward" % hexString)
                 del self._inBuffer[0]
-                inBufferLength = len(self._inBuffer)
+                continue
             else:
                 self._inBuffer = self._inBuffer[8:]
-                inBufferLength = len(self._inBuffer)
 
-        if packet is None:
-            LOG.debug("Unable to find message in buffer")
-            return
-        else:
             LOG.debug("Have packet: %s" % packet)
 
-        if hasattr(packet, 'opcodeType') and packet.opcodeType is not None:
-            inboundHandler = DynetInbound()
-            if hasattr(inboundHandler, packet.opcodeType.lower()):
-                event = getattr(
-                    inboundHandler, packet.opcodeType.lower())(packet)
-                self.broadcast(event)
+            if hasattr(packet, 'opcodeType') and packet.opcodeType is not None:
+                inboundHandler = DynetInbound()
+                if hasattr(inboundHandler, packet.opcodeType.lower()):
+                    event = getattr(
+                        inboundHandler, packet.opcodeType.lower())(packet)
+                    self.broadcast(event)
+                else:
+                    LOG.debug("Unhandled Dynet Inbound (%s): %s" %
+                              (packet.opcodeType, packet))
             else:
-                LOG.debug("Unhandled Dynet Inbound (%s): %s" %
-                          (packet.opcodeType, packet))
-        else:
-            LOG.debug("Unhandled Dynet Inbound: %s" % packet)
+                LOG.debug("Unhandled Dynet Inbound: %s" % packet)
         # If there is still buffer to process - start again
-        if inBufferLength >= 8:
+        if len(self._inBuffer) >= 8:
             self._loop.create_task(self._receive())
 
     @asyncio.coroutine

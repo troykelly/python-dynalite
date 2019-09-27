@@ -11,13 +11,17 @@ import logging
 import json
 from .dynet import Dynet, DynetControl
 
-
 class BroadcasterError(Exception):
     def __init__(self, message):
         self.message = message
 
 
 class PresetError(Exception):
+    def __init__(self, message):
+        self.message = message
+
+
+class ChannelError(Exception):
     def __init__(self, message):
         self.message = message
 
@@ -52,6 +56,8 @@ class DynaliteConfig(object):
         self.preset = {}
         self.area = config['area'] if 'area' in config else {}
         self.preset = config['preset'] if 'preset' in config else {}
+        self.autodiscover = config['autodiscover'] if 'autodiscover' in config else True # autodiscover by default
+        self.polltimer = config['polltimer'] if 'polltimer' in config else 1 # default poll 1 sec
 
 
 class Broadcaster(object):
@@ -115,7 +121,8 @@ class DynalitePreset(object):
                 'state': 'OFF'
             }
             self.broadcastFunction(
-                Event(eventType='newpreset', data=broadcastData))
+                Event(eventType='NEWPRESET', data=broadcastData)
+            )
 
     def turnOn(self, sendDynet=True, sendMQTT=True):
         self.active = True
@@ -129,7 +136,7 @@ class DynalitePreset(object):
                 'state': 'ON'
             }
             self.broadcastFunction(
-                Event(eventType='preset', data=broadcastData))
+                Event(eventType='PRESET', data=broadcastData))
         if sendDynet and self._control:
             self._control.areaPreset(
                 area=self.area.value, preset=self.value, fade=self.fade)
@@ -149,14 +156,61 @@ class DynalitePreset(object):
                 'state': 'OFF'
             }
             self.broadcastFunction(
-                Event(eventType='preset', data=broadcastData))
+                Event(eventType='PRESET', data=broadcastData))
         if sendDynet and self._control:
-            self._control.areaOff(area=self.area.value, fade=self.fade)
+            self._control.areaOff(area=self.area.value, fade=self.fade) # XXX TODO check if this behavior is correct. In general, you select a preset, so there is no real "turn-off"
+
+class DynaliteChannel(object):
+
+    def __init__(self, name=None, value=None, fade=2, logger=None, broadcastFunction=None, area=None, dynetControl=None):
+        logger.debug("DynaliteChannel init called area=%s channel=%s fade=%s" % (area.value, value, fade))
+        if not value:
+            raise ChannelError("A channel must have a value")
+        self._logger = logger
+        self.level = 0
+        self.name = name if name else "Channel " + str(value)
+        self.value = int(value)
+        self.fade = float(fade)
+        self.area = area
+        self.broadcastFunction = broadcastFunction
+        self._control = dynetControl
+        if self.broadcastFunction:
+            broadcastData = {
+                'area': self.area.value,
+                'channel': self.value,
+                'name': self.area.name + ' ' + self.name,
+                'level': self.level
+            }
+            self.broadcastFunction(
+                Event(eventType='NEWCHANNEL', data=broadcastData))
+        self.requestChannelLevel() # ask for the initial level
+
+    def turnOn(self, brightness=1.0, sendDynet=True, sendMQTT=True):
+        if sendDynet and self._control:
+            self._control.setChannel(
+                area=self.area.value, channel=self.value, level=brightness, fade=self.fade)
+
+    def turnOff(self, sendDynet=True, sendMQTT=True): 
+        if sendDynet and self._control:
+             self._control.setChannel(
+                area=self.area.value, channel=self.value, level=0, fade=self.fade)
+                
+    def requestChannelLevel(self):
+        self.area.requestChannelLevel(self.value)
+        
+    def stopFade(self):
+        self._control.stop_channel_fade(area=self.area.value, channel=self.value) 
+        
+    def getLevel(self):
+        return self.level
+
+    def setLevel(self, level):
+        self.level = level
 
 
 class DynaliteArea(object):
 
-    def __init__(self, name=None, value=None, fade=2, areaPresets=None, defaultPresets=None, areaType=None, onPreset=None, offPreset=None, logger=None, broadcastFunction=None, dynetControl=None):
+    def __init__(self, name=None, value=None, fade=2, areaPresets=None, defaultPresets=None, areaChannels=None, areaType=None, onPreset=None, offPreset=None, logger=None, broadcastFunction=None, dynetControl=None):
         if not value:
             raise PresetError("An area must have a value")
         self._logger = logger
@@ -165,6 +219,7 @@ class DynaliteArea(object):
         self.value = int(value)
         self.fade = fade
         self.preset = {}
+        self.channel = {}
         self.activePreset = None
         self.state = None
 
@@ -200,24 +255,55 @@ class DynaliteArea(object):
                     presetFade = preset['fade'] if preset['fade'] else fade
                     self.preset[int(presetValue)] = DynalitePreset(
                         name=presetName, value=presetValue, fade=presetFade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
+        if areaChannels:
+            for channelValue in areaChannels:
+                if (int(channelValue) >=1) and (int(channelValue)<=255):
+                    channel = areaChannels[channelValue]
+                    name = channel['name'] if channel and ('name' in channel) else 'Channel ' + channelValue
+                    fade = channel['fade'] if channel and ('fade' in channel) else self.fade # if no fade provided, use the fade of the area
+                    self.channel[int(channelValue)] = DynaliteChannel(name=name, value=channelValue, fade=fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
+                    self._logger.debug("added area %s channel %s name %s" % (self.name, channelValue, name) )
+                else:
+                    self._logger.error("illegal channel value area %s channel %s" % (self.name, channelValue))
+        else:
+            self.channel = {}
+        self.requestPreset() # ask for the initial preset
+   
 
-    def presetOn(self, preset, sendDynet=True, sendMQTT=True):
+    def presetOn(self, preset, sendDynet=True, sendMQTT=True, autodiscover=False):
         if hasattr(self, 'onPreset'):
             if self.onPreset == preset:
                 self.state = self._onName
         else:
             self.state = self._offName
         if preset not in self.preset:
+            if not autodiscover:
+                return
             self.preset[preset] = DynalitePreset(
                 value=preset, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
         self.preset[preset].turnOn(sendDynet=sendDynet, sendMQTT=sendMQTT)
 
-    def presetOff(self, preset, sendDynet=True, sendMQTT=True):
+    def presetOff(self, preset, sendDynet=True, sendMQTT=True): # XXX TODO check if this is used anywhere. generally presets cannot be turned off
         if preset not in self.preset:
+            return # XXX if we want it to auto-register presets need to fix race condition
             self.preset[preset] = DynalitePreset(
                 value=preset, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
-        self.preset[preset].turnOff(sendDynet=sendDynet, sendMQTT=sendMQTT)
+        else: # this still has a bug that the preset won't be selected when chosen. Need a better fix for the race XXX
+            self.preset[preset].turnOff(sendDynet=sendDynet, sendMQTT=sendMQTT)
+        
+    def requestPreset(self):
+        self._dynetControl.request_area_preset(self.value)
+        
+    def setChannelLevel(self, channel, level, autodiscover=False):
+        if channel not in self.channel:
+            if not autodiscover:
+                return
+            self.channel[channel] = DynaliteChannel(
+                value=channel, fade=self.fade, logger=self._logger, broadcastFunction=self.broadcastFunction, area=self, dynetControl=self._dynetControl)
+        self.channel[channel].setLevel(level)
 
+    def requestChannelLevel(self, channel):
+        self._dynetControl.request_channel_level(area=self.value, channel=channel)
 
 class Dynalite(object):
 
@@ -229,7 +315,7 @@ class Dynalite(object):
                             format=self._config.log_formatter)
 
         self._configured = False
-
+        self._autodiscover = False
         self._listeners = []
 
         self.devices = {
@@ -250,10 +336,34 @@ class Dynalite(object):
 
     @asyncio.coroutine
     def _processTraffic(self, event):
+        # The logic here is:
+        # - new area is created - ask for the current preset
+        # - preset selected - turn the preset on but don't send it as a command
+        # - new channel is created - ask for the current level
+        # - channel update - update the level and if it is fading (actual != target), schedule a timer to ask again
+        # - channel set command - request current level (may not be the target because of fade)
+        if event.data['area'] in self.devices['area']:
+            curArea = self.devices['area'][event.data['area']]
+            if event.eventType in ['NEWPRESET', 'NEWCHANNEL']:
+                self._logger.error(event.eventType + " in _processTraffic - we should not get here")
+            elif event.eventType == 'PRESET':
+                curArea.presetOn(event.data['preset'], sendDynet=False, sendMQTT=False, autodiscover=self._autodiscover)
+            elif event.eventType == 'CHANNEL':
+                if event.data['action'] == 'report':
+                    curArea.setChannelLevel( event.data['channel'], (255-event.data['actual_level']) / 254.0, self._autodiscover )
+                    if event.data['actual_level'] != event.data['target_level']:
+                        self._logger.debug("area=%s channel=%s actual_level=%s target_level=%s setting timer" % (event.data['area'], event.data['channel'], event.data['actual_level'], event.data['target_level']) )
+                        self.loop.call_later(self._polltimer, curArea.requestChannelLevel, event.data['channel'])
+                elif event.data['action'] == 'cmd':
+                    curArea.requestChannelLevel(event.data['channel'])
+                else:
+                    self._logger.warning("CHANNEL command unknown cmd: %s" % event.toJson)
+            else:
+                self._logger.debug("Upknown event type: %s" % event.toJson)
+        else:
+            self._logger.debug("Update from unknown area: %s" % event.toJson)
+        # First handle, and then broadcast so broadcast receivers have updated device levels and presets
         self.broadcast(event)
-        if event.eventType == 'PRESET':
-            self.devices['area'][event.data['area']].presetOn(
-                event.data['preset'], sendDynet=False, sendMQTT=False)
 
     @asyncio.coroutine
     def _connect(self):
@@ -288,6 +398,8 @@ class Dynalite(object):
 
     @asyncio.coroutine
     def _configure(self):
+        self._autodiscover = self._config.autodiscover
+        self._polltimer = self._config.polltimer
         for areaValue in self._config.area:
             areaName = self._config.area[areaValue]['name'] if 'name' in self._config.area[areaValue] else None
             areaPresets = self._config.area[areaValue]['preset'] if 'preset' in self._config.area[areaValue] else {
@@ -296,6 +408,7 @@ class Dynalite(object):
             if areaFade is None:
                 areaFade = self._config.default['fade'] if 'fade' in self._config.default else 2
             areaFade = float(areaFade)
+            areaChannels = self._config.area[areaValue]['channel'] if 'channel' in self._config.area[areaValue] else None
             if 'nodefault' in self._config.area[areaValue] and self._config.area[areaValue]['nodefault'] == True:
                 defaultPresets = None
             else:
@@ -304,13 +417,13 @@ class Dynalite(object):
             self._logger.debug(
                 "Generating Area '%d/%s' with a default fade of %f" % (int(areaValue), areaName, areaFade))
             self.devices['area'][int(areaValue)] = DynaliteArea(
-                name=areaName, value=areaValue, fade=areaFade, areaPresets=areaPresets, defaultPresets=defaultPresets, logger=self._logger, broadcastFunction=self.broadcast, dynetControl=self.control)
+                name=areaName, value=areaValue, fade=areaFade, areaPresets=areaPresets, areaChannels=areaChannels, defaultPresets=defaultPresets, logger=self._logger, broadcastFunction=self.broadcast, dynetControl=self.control)
         self._configured = True
 
     def state(self):
         self.loop.create_task(self._state())
 
-    @asyncio.coroutine
+    @asyncio.coroutine # XXX understand what it does. sends new on everything
     def _state(self):
         for areaValue in self.devices['area']:
             area = self.devices['area'][areaValue]
