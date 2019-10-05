@@ -63,27 +63,52 @@ class DynetInbound(object):
         return self.preset(packet)
 
     def request_preset(self, packet):
-        return DynetEvent(eventType='REQPRESET', message=("Request Area %d preset" % (packet.area)), data={'area': packet.area, 'join': packet.join}, direction="IN")
+        return DynetEvent(
+            eventType='REQPRESET', 
+            message=("Request Area %d preset" % (packet.area)),
+            data={'area': packet.area, 'join': packet.join}, 
+            direction="IN"
+        )
 
     def report_preset(self, packet):
         packet.preset = packet.data[0] + 1
-        return DynetEvent(eventType='PRESET', message=("Current Area %d Preset is %d" % (packet.area, packet.preset)), data={'area': packet.area, 'preset': packet.preset, 'join': packet.join, 'state': 'ON'}, direction="IN")
+        return DynetEvent(
+            eventType='PRESET', 
+            message=("Current Area %d Preset is %d" % (packet.area, packet.preset)), 
+            data={'area': packet.area, 'preset': packet.preset, 'join': packet.join, 'state': 'ON'}, 
+            direction="IN"
+        )
 
     def linear_preset(self, packet):
         packet.preset = packet.data[0] + 1
         packet.fade = (packet.data[1] + (packet.data[2] * 256)) * 0.02
-        return DynetEvent(eventType='PRESET', message=("Area %d Preset %d Fade %d seconds." % (packet.area, packet.preset, packet.fade)), data={'area': packet.area, 'preset': packet.preset, 'fade': packet.fade, 'join': packet.join, 'state': 'ON'}, direction="IN")
+        return DynetEvent(
+            eventType='PRESET', 
+            message=("Area %d Preset %d Fade %d seconds." % (packet.area, packet.preset, packet.fade)), 
+            data={'area': packet.area, 'preset': packet.preset, 'fade': packet.fade, 'join': packet.join, 'state': 'ON'}, 
+            direction="IN"
+        )
     
     def report_channel_level(self, packet):
         channel = packet.data[0] + 1
         target_level = packet.data[1]
         actual_level = packet.data[2]
-        return DynetEvent(eventType='CHANNEL', message=("Area %d Channel %d Target Level %d Actual Level %d." % (packet.area, channel, target_level, actual_level)), data={'area': packet.area, 'channel': channel, 'action': 'report', 'target_level': target_level, 'actual_level': actual_level, 'join': packet.join, 'state': 'ON'}, direction="IN")
+        return DynetEvent(
+            eventType='CHANNEL', 
+            message=("Area %d Channel %d Target Level %d Actual Level %d." % (packet.area, channel, target_level, actual_level)), 
+            data={'area': packet.area, 'channel': channel, 'action': 'report', 'target_level': target_level, 'actual_level': actual_level, 'join': packet.join, 'state': 'ON'}, 
+            direction="IN"
+        )
         
     def set_channel_x_to_level_with_fade(self, packet, channel_offset):
         channel = ( (packet.data[1]+1) % 256 ) * 4 + channel_offset
         target_level = packet.data[0]
-        return DynetEvent(eventType='CHANNEL', message=("Area %d Channel %d Target Level %d" % (packet.area, channel, target_level)), data={'area': packet.area, 'channel': channel, 'action': 'cmd', 'target_level': target_level, 'join': packet.join, 'state': 'ON'}, direction="IN")
+        return DynetEvent(
+            eventType='CHANNEL', 
+            message=("Area %d Channel %d Target Level %d" % (packet.area, channel, target_level)), 
+            data={'area': packet.area, 'channel': channel, 'action': 'cmd', 'target_level': target_level, 'join': packet.join, 'state': 'ON'}, 
+            direction="IN"
+        )
 
     def set_channel_1_to_level_with_fade(self, packet):
         return self.set_channel_x_to_level_with_fade(packet, 1)
@@ -97,3 +122,35 @@ class DynetInbound(object):
     def set_channel_4_to_level_with_fade(self, packet):
         return self.set_channel_x_to_level_with_fade(packet, 4)
 
+    def request_channel_level(self, packet):
+        return
+
+    def stop_fading(self, packet):
+        channel = packet.data[0] + 1
+        if channel == 256: # all channels in area
+            channel = 'ALL'
+        return DynetEvent(
+            eventType='CHANNEL', 
+            message=("Area %d Channel %s" % (packet.area, channel)), 
+            data={'area': packet.area, 'channel': channel, 'action': 'cmd', 'join': packet.join, 'state': 'ON'}, 
+            direction="IN"
+        )
+
+    def fade_channel_area_to_preset(self, packet):
+        channel = packet.data[0] + 1
+        packet.preset = packet.data[1] + 1
+        packet.fade = packet.data[2] * 0.02
+        if channel == 256: # all channels in area
+            return DynetEvent(
+                eventType='PRESET', 
+                message=("Current Area %d Preset is %d fade %s" % (packet.area, packet.preset, packet.fade)), 
+                data={'area': packet.area, 'preset': packet.preset, 'fade': packet.fade, 'join': packet.join, 'state': 'ON'}, 
+                direction="IN"
+            )
+        else:
+            return DynetEvent(
+                eventType='CHANNEL', 
+                message=("Area %d Channel %s preset %s fade %s" % (packet.area, channel, packet.preset, packet.fade)), 
+                data={'area': packet.area, 'channel': channel, 'fade': packet.fade, 'action': 'cmd', 'preset': packet.preset, 'join': packet.join, 'state': 'ON'}, 
+                direction="IN"
+            )
