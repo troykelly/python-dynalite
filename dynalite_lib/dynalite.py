@@ -360,8 +360,9 @@ class DynaliteArea(object):
         self._dynetControl.request_channel_level(area=self.value, channel=channel)
 
     def requestAllChannelLevels(self):
-        for channel in self.channel:
-            self.requestChannelLevel(channel) 
+        if self.channel:
+            for channel in self.channel:
+                self.requestChannelLevel(channel) 
 
 class Dynalite(object):
 
@@ -456,7 +457,7 @@ class Dynalite(object):
                 if 'preset' in event.data:
                     try:
                         target_level = curArea.channel[event.data['channel']].presets[str(event.data['preset'])]
-                    except KeyError:
+                    except (KeyError, TypeError):
                         pass
                 if 'target_level' in event.data:
                     target_level = (255 - event.data['target_level']) / 254.0
