@@ -362,6 +362,7 @@ class DynaliteArea(object):
     def requestAllChannelLevels(self):
         if self.channel:
             for channel in self.channel:
+                self._logger.debug("XXX request all channel levels area %s channel %s" % (self.value, channel))
                 self.requestChannelLevel(channel) 
 
 class Dynalite(object):
@@ -406,11 +407,11 @@ class Dynalite(object):
 
     @asyncio.coroutine
     def _connected(self, dynet=None, transport=None):
-        self.broadcast(Event(eventType='connected', data={}))
+        self.broadcast(Event(eventType='CONNECTED', data={}))
 
     @asyncio.coroutine
     def _disconnection(self, dynet=None):
-        self.broadcast(Event(eventType='disconnected', data={}))
+        self.broadcast(Event(eventType='DISCONNECTED', data={}))
         self.connect()
 
     def processTraffic(self, event):
@@ -507,6 +508,8 @@ class Dynalite(object):
             self.devices[CONF_AREA][int(areaValue)] = DynaliteArea(
                 name=areaName, value=areaValue, fade=areaFade, areaPresets=areaPresets, areaChannels=areaChannels, defaultPresets=defaultPresets, logger=self._logger, broadcastFunction=self.broadcast, dynetControl=self.control)
         self._configured = True
+        self.broadcast(Event(eventType='CONFIGURED', data={}))
+
 
     def state(self):
         self.loop.create_task(self._state())
