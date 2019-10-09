@@ -27,7 +27,6 @@ class PacketError(Exception):
 
 
 class DynetPacket(object):
-
     def __init__(self, msg=None):
         self.opcodeType = None
         self.sync = None
@@ -76,14 +75,23 @@ class DynetPacket(object):
 
     def calcsum(self, msg):
         msg = msg[:7]
-        return (-(sum(ord(c) for c in "".join(map(chr, msg))) % 256) & 0xFF)
+        return -(sum(ord(c) for c in "".join(map(chr, msg))) % 256) & 0xFF
 
     def __repr__(self):
         return json.dumps(self.__dict__)
 
-class DynetConnection(asyncio.Protocol):
 
-    def __init__(self, connectionMade=None, connectionLost=None, receiveHandler=None, connectionPause=None, connectionResume=None, loop=None, logger=DEFAULT_LOG):
+class DynetConnection(asyncio.Protocol):
+    def __init__(
+        self,
+        connectionMade=None,
+        connectionLost=None,
+        receiveHandler=None,
+        connectionPause=None,
+        connectionResume=None,
+        loop=None,
+        logger=DEFAULT_LOG,
+    ):
         self._transport = None
         self._paused = False
         self._loop = loop
@@ -140,7 +148,6 @@ class DynetConnection(asyncio.Protocol):
 
 
 class DynetControl(object):
-
     def __init__(self, dynet, loop, areaDefinition=None, logger=DEFAULT_LOG):
         self._dynet = dynet
         self._loop = loop
@@ -148,8 +155,7 @@ class DynetControl(object):
         self._logger = logger
 
     def areaPreset(self, area, preset, fade=2):
-        self._loop.create_task(self._areaPreset(
-            area=area, preset=preset, fade=fade))
+        self._loop.create_task(self._areaPreset(area=area, preset=preset, fade=fade))
 
     @asyncio.coroutine
     def _areaPreset(self, area, preset, fade):
@@ -161,25 +167,32 @@ class DynetControl(object):
             opcode = opcode + 6
         fadeLow = int(fade / 0.02) - (int((fade / 0.02) / 256) * 256)
         fadeHigh = int((fade / 0.02) / 256)
-        packet.toMsg(sync=28, area=area, command=opcode,
-                     data=[fadeLow, fadeHigh, bank], join=255)
+        packet.toMsg(
+            sync=28, area=area, command=opcode, data=[fadeLow, fadeHigh, bank], join=255
+        )
         self._dynet.write(packet)
 
     def setChannel(self, area, channel, level, fade=2):
-        self._loop.create_task(self._setChannel(
-            area=area, channel=channel, level=level, fade=fade))
+        self._loop.create_task(
+            self._setChannel(area=area, channel=channel, level=level, fade=fade)
+        )
 
     @asyncio.coroutine
     def _setChannel(self, area, channel, level, fade):
         packet = DynetPacket()
-        channel_bank = 0xff if (channel <= 4) else ( int((channel-1) / 4) - 1)
-        target_level = int(255 - 254*level)
-        opcode = 0x80 + ( (channel-1) % 4 )
+        channel_bank = 0xFF if (channel <= 4) else (int((channel - 1) / 4) - 1)
+        target_level = int(255 - 254 * level)
+        opcode = 0x80 + ((channel - 1) % 4)
         fade_time = int(fade / 0.02)
-        if (fade_time) > 0xff:
-            fade_time = 0xff
-        packet.toMsg(sync=28, area=area, command=opcode,
-                     data=[target_level, channel_bank, fade_time], join=255)
+        if (fade_time) > 0xFF:
+            fade_time = 0xFF
+        packet.toMsg(
+            sync=28,
+            area=area,
+            command=opcode,
+            data=[target_level, channel_bank, fade_time],
+            join=255,
+        )
         self._dynet.write(packet)
         self.request_channel_level(area=area, channel=channel)
 
@@ -189,18 +202,30 @@ class DynetControl(object):
     @asyncio.coroutine
     def _request_channel_level(self, area, channel):
         packet = DynetPacket()
-        packet.toMsg(sync=28, area=area, command=OpcodeType.REQUEST_CHANNEL_LEVEL.value, data=[channel-1, 0, 0], join=255) 
+        packet.toMsg(
+            sync=28,
+            area=area,
+            command=OpcodeType.REQUEST_CHANNEL_LEVEL.value,
+            data=[channel - 1, 0, 0],
+            join=255,
+        )
         self._dynet.write(packet)
-        
+
     def stop_channel_fade(self, area, channel):
         self._loop.create_task(self._stop_channel_fade(area=area, channel=channel))
 
     @asyncio.coroutine
     def _stop_channel_fade(self, area, channel):
         packet = DynetPacket()
-        packet.toMsg(sync=28, area=area, command=OpcodeType.STOP_FADING.value, data=[channel-1, 0, 0], join=255) 
+        packet.toMsg(
+            sync=28,
+            area=area,
+            command=OpcodeType.STOP_FADING.value,
+            data=[channel - 1, 0, 0],
+            join=255,
+        )
         self._dynet.write(packet)
-        
+
     def areaOff(self, area, fade=2):
         self._loop.create_task(self._areaOff(area=area, fade=fade))
 
@@ -211,8 +236,9 @@ class DynetControl(object):
             fade = 25.5
         if fade < 0:
             fade = 0
-        packet.toMsg(sync=28, area=area, command=104, data=[
-                     255, 0, int(fade * 10)], join=255)
+        packet.toMsg(
+            sync=28, area=area, command=104, data=[255, 0, int(fade * 10)], join=255
+        )
         self._dynet.write(packet)
 
     def request_area_preset(self, area):
@@ -221,16 +247,29 @@ class DynetControl(object):
     @asyncio.coroutine
     def _request_area_preset(self, area):
         packet = DynetPacket()
-        packet.toMsg(sync=28, area=area, command=OpcodeType.REQUEST_PRESET.value, data=[
-                     0, 0, 0], join=255)
+        packet.toMsg(
+            sync=28,
+            area=area,
+            command=OpcodeType.REQUEST_PRESET.value,
+            data=[0, 0, 0],
+            join=255,
+        )
         self._dynet.write(packet)
 
-class Dynet(object):
 
-    def __init__(self, host=None, port=None, broadcaster=None, onConnect=None, onDisconnect=None, loop=None, logger=DEFAULT_LOG):
+class Dynet(object):
+    def __init__(
+        self,
+        host=None,
+        port=None,
+        broadcaster=None,
+        onConnect=None,
+        onDisconnect=None,
+        loop=None,
+        logger=DEFAULT_LOG,
+    ):
         if host is None or port is None or loop is None:
-            raise DynetError(
-                'Must supply a host, port and loop for Dynet connection')
+            raise DynetError("Must supply a host, port and loop for Dynet connection")
         self._host = host
         self._port = port
         self._loop = loop
@@ -238,8 +277,14 @@ class Dynet(object):
         self.broadcast = broadcaster
         self._onConnect = onConnect
         self._onDisconnect = onDisconnect
-        self._conn = lambda: DynetConnection(connectionMade=self._connection, connectionLost=self._disconnection,
-                                             receiveHandler=self._receive, connectionPause=self._pause, connectionResume=self._resume, loop=self._loop)
+        self._conn = lambda: DynetConnection(
+            connectionMade=self._connection,
+            connectionLost=self._disconnection,
+            receiveHandler=self._receive,
+            connectionPause=self._pause,
+            connectionResume=self._resume,
+            loop=self._loop,
+        )
         self._transport = None
         self._handlers = {}
         self._connection_retry_timer = 1
@@ -262,13 +307,24 @@ class Dynet(object):
     async def _connect(self):
         self._logger.debug("Connecting to Dynet on %s:%d" % (self._host, self._port))
         try:
-            await asyncio.wait_for(self._loop.create_connection(self._conn, host=self._host, port=self._port), timeout=self._timeout)
+            await asyncio.wait_for(
+                self._loop.create_connection(
+                    self._conn, host=self._host, port=self._port
+                ),
+                timeout=self._timeout,
+            )
         except (ValueError, OSError, asyncio.TimeoutError) as err:
-            self._logger.warning("Could not connect to Dynet (%s). Retrying in %d seconds",
-                        err, self._connection_retry_timer)
+            self._logger.warning(
+                "Could not connect to Dynet (%s). Retrying in %d seconds",
+                err,
+                self._connection_retry_timer,
+            )
             self._loop.call_later(self._connection_retry_timer, self.connect)
-            self._connection_retry_timer = 2 * \
-                self._connection_retry_timer if self._connection_retry_timer < 32 else 60
+            self._connection_retry_timer = (
+                2 * self._connection_retry_timer
+                if self._connection_retry_timer < 32
+                else 60
+            )
 
     @asyncio.coroutine
     def _receive(self, data=None):
@@ -277,31 +333,40 @@ class Dynet(object):
                 self._inBuffer.append(int(byte))
 
         if len(self._inBuffer) < 8:
-            self._logger.debug("Received %d bytes, not enough to process: %s" %(len(self._inBuffer), self._inBuffer))
+            self._logger.debug(
+                "Received %d bytes, not enough to process: %s"
+                % (len(self._inBuffer), self._inBuffer)
+            )
 
         packet = None
         while len(self._inBuffer) >= 8 and packet is None:
             firstByte = self._inBuffer[0]
             if SyncType.has_value(firstByte):
-                if (firstByte == SyncType.DEBUG_MSG.value):
+                if firstByte == SyncType.DEBUG_MSG.value:
                     bytemsg = "".join(chr(c) for c in self._inBuffer[1:7])
                     self._logger.debug("Dynet DEBUG message %s" % bytemsg)
                     self._inBuffer = self._inBuffer[8:]
                     continue
-                elif (firstByte == SyncType.DEVICE.value):
-                    self._logger.debug("Not handling Dynet DEVICE message %s" % self._inBuffer[:8])
+                elif firstByte == SyncType.DEVICE.value:
+                    self._logger.debug(
+                        "Not handling Dynet DEVICE message %s" % self._inBuffer[:8]
+                    )
                     self._inBuffer = self._inBuffer[8:]
                     continue
-                elif (firstByte == SyncType.LOGICAL.value):
+                elif firstByte == SyncType.LOGICAL.value:
                     try:
                         packet = DynetPacket(msg=self._inBuffer[:8])
                     except PacketError as err:
                         self._logger.error(err)
                         packet = None
-                    
+
             if packet is None:
-                hexString = ":".join("{:02x}".format(ord(c)) for c in self._inBuffer[:8])
-                self._logger.debug("Unable to process packet %s - moving one byte forward" % hexString)
+                hexString = ":".join(
+                    "{:02x}".format(ord(c)) for c in self._inBuffer[:8]
+                )
+                self._logger.debug(
+                    "Unable to process packet %s - moving one byte forward" % hexString
+                )
                 del self._inBuffer[0]
                 continue
             else:
@@ -309,16 +374,16 @@ class Dynet(object):
 
             self._logger.debug("Have packet: %s" % packet)
 
-            if hasattr(packet, 'opcodeType') and packet.opcodeType is not None:
+            if hasattr(packet, "opcodeType") and packet.opcodeType is not None:
                 inboundHandler = DynetInbound()
                 if hasattr(inboundHandler, packet.opcodeType.lower()):
-                    event = getattr(
-                        inboundHandler, packet.opcodeType.lower())(packet)
+                    event = getattr(inboundHandler, packet.opcodeType.lower())(packet)
                     if event:
                         self.broadcast(event)
                 else:
-                    self._logger.debug("Unhandled Dynet Inbound (%s): %s" %
-                              (packet.opcodeType, packet))
+                    self._logger.debug(
+                        "Unhandled Dynet Inbound (%s): %s" % (packet.opcodeType, packet)
+                    )
             else:
                 self._logger.debug("Unhandled Dynet Inbound: %s" % packet)
         # If there is still buffer to process - start again
@@ -343,18 +408,18 @@ class Dynet(object):
         self._logger.debug("Connected to Dynet on %s:%d" % (self._host, self._port))
         self.cleanup()
         if not transport is None:
-            self.write() # write whatever is queued in the buffer
+            self.write()  # write whatever is queued in the buffer
             self._transport = transport
             if self._onConnect is not None:
-                self._loop.create_task(self._onConnect(
-                    dynet=self, transport=transport))
+                self._loop.create_task(self._onConnect(dynet=self, transport=transport))
         else:
             raise DynetError("Connected but no transport channel provided")
 
     @asyncio.coroutine
     def _disconnection(self, exc=None):
-        self._logger.debug("Disconnected from Dynet on %s:%d" %
-                  (self._host, self._port))
+        self._logger.debug(
+            "Disconnected from Dynet on %s:%d" % (self._host, self._port)
+        )
         self.cleanup()
         if self._onDisconnect is not None:
             self._loop.create_task(self._onDisconnect(dynet=self))
@@ -380,11 +445,13 @@ class Dynet(object):
             return
 
         if self._lastSent is None:
-            self._lastSent = int(round(time.time() * 1000)) # XXX this logic seems wrong. It looks like it will send 1 packet per second at most
+            self._lastSent = int(
+                round(time.time() * 1000)
+            )  # XXX this logic seems wrong. It looks like it will send 1 packet per second at most
 
         current_milli_time = int(round(time.time() * 1000))
-        elapsed = (current_milli_time - self._lastSent)
-        delay = (0 - (elapsed - self._messageDelay))
+        elapsed = current_milli_time - self._lastSent
+        delay = 0 - (elapsed - self._messageDelay)
         if delay > 0:
             self._loop.call_later(delay / 1000, self.write)
             return

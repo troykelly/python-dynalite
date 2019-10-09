@@ -1,7 +1,7 @@
 import json
 
-class DynetEvent(object):
 
+class DynetEvent(object):
     def __init__(self, eventType=None, message=None, data={}, direction=None):
         self.eventType = eventType.upper() if eventType else None
         self.msg = message
@@ -13,4 +13,3 @@ class DynetEvent(object):
 
     def __repr__(self):
         return json.dumps(self.__dict__)
-
