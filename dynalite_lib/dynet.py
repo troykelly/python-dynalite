@@ -81,19 +81,6 @@ class DynetPacket(object):
     def __repr__(self):
         return json.dumps(self.__dict__)
 
-
-class DynetEvent(object):
-
-    def __init__(self, eventType=None, message=None, data={}, direction=None):
-        self.eventType = eventType.upper() if eventType else None
-        self.msg = message
-        self.data = data
-        self.direction = direction
-
-    def toJson(self):
-        return json.dumps(self.__dict__)
-
-
 class DynetConnection(asyncio.Protocol):
 
     def __init__(self, connectionMade=None, connectionLost=None, receiveHandler=None, connectionPause=None, connectionResume=None, loop=None, logger=DEFAULT_LOG):
@@ -290,7 +277,7 @@ class Dynet(object):
                 self._inBuffer.append(int(byte))
 
         if len(self._inBuffer) < 8:
-            self._logger.debug("Received %d bytes, not enough to process: %s" %(inBufferLength,self._inBuffer))
+            self._logger.debug("Received %d bytes, not enough to process: %s" %(len(self._inBuffer), self._inBuffer))
 
         packet = None
         while len(self._inBuffer) >= 8 and packet is None:
@@ -336,6 +323,7 @@ class Dynet(object):
                 self._logger.debug("Unhandled Dynet Inbound: %s" % packet)
         # If there is still buffer to process - start again
         if len(self._inBuffer) >= 8:
+            self._logger.debug("XXX _receive requeuing")
             self._loop.create_task(self._receive())
 
     @asyncio.coroutine
@@ -392,7 +380,7 @@ class Dynet(object):
             return
 
         if self._lastSent is None:
-            self._lastSent = int(round(time.time() * 1000))
+            self._lastSent = int(round(time.time() * 1000)) # XXX this logic seems wrong. It looks like it will send 1 packet per second at most
 
         current_milli_time = int(round(time.time() * 1000))
         elapsed = (current_milli_time - self._lastSent)
