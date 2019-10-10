@@ -187,6 +187,7 @@ class DynalitePreset(object):
             if self.value != preset:
                 if self.area.preset[preset].active:
                     self.area.preset[preset].turnOff(sendDynet=False, sendMQTT=True)
+        self.area.requestAllChannelLevels(delay=INITIAL_RETRY_DELAY, immediate=False)
 
     def turnOff(self, sendDynet=True, sendMQTT=True):
         self.active = False
