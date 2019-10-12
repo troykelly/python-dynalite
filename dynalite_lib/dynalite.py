@@ -370,6 +370,9 @@ class DynaliteArea(object):
 
         self.broadcastFunction = broadcastFunction
         self._dynetControl = dynetControl
+
+        self.requestPreset(delay=STARTUP_RETRY_DELAY)  # ask for the initial preset
+
         if areaPresets:
             for presetValue in areaPresets:
                 preset = areaPresets[presetValue]
@@ -433,7 +436,6 @@ class DynaliteArea(object):
                     )
         else:
             self.channel = {}
-        self.requestPreset(delay=STARTUP_RETRY_DELAY)  # ask for the initial preset
 
     def presetOn(self, preset, sendDynet=True, sendMQTT=True, autodiscover=False):
         if hasattr(self, "onPreset"):
@@ -471,8 +473,12 @@ class DynaliteArea(object):
             self.preset[preset].turnOff(sendDynet=sendDynet, sendMQTT=sendMQTT)
 
     def requestPreset(self, delay=INITIAL_RETRY_DELAY, immediate=True):
+        def shouldRun():
+            return self.presetUpdateCounter.counter == currentCounter
+            
+        currentCounter = self.presetUpdateCounter.counter
         self.presetUpdateCounter.schedule(
-            delay, immediate, self._dynetControl.request_area_preset, self.value
+            delay, immediate, self._dynetControl.request_area_preset, self.value, shouldRun
         )
 
     def setChannelLevel(self, channel, level, autodiscover=False):
@@ -492,14 +498,19 @@ class DynaliteArea(object):
         self.channel[channel].setLevel(level)
 
     def requestChannelLevel(self, channel, delay=INITIAL_RETRY_DELAY, immediate=True):
+        def shouldRun():
+            return self.channelUpdateCounter[channel].counter == currentCounter
+            
         if channel not in self.channelUpdateCounter:
             self.channelUpdateCounter[channel] = RequestCounter(self.loop, self.logger)
+        currentCounter = self.channelUpdateCounter[channel].counter
         self.channelUpdateCounter[channel].schedule(
             delay,
             immediate,
             self._dynetControl.request_channel_level,
             self.value,
             channel,
+            shouldRun
         )
 
     def requestAllChannelLevels(self, delay=INITIAL_RETRY_DELAY, immediate=True):
@@ -724,6 +735,7 @@ class Dynalite(object):
 
     @asyncio.coroutine
     def _state(self):
+        aaa=bbb # XXX raise exception
         for areaValue in self.devices[CONF_AREA]:
             area = self.devices[CONF_AREA][areaValue]
             for presetValue in area.preset:

@@ -27,7 +27,7 @@ class PacketError(Exception):
 
 
 class DynetPacket(object):
-    def __init__(self, msg=None):
+    def __init__(self, msg=None, shouldRun=None):
         self.opcodeType = None
         self.sync = None
         self.area = None
@@ -37,6 +37,7 @@ class DynetPacket(object):
         self.chk = None
         if msg is not None:
             self.fromMsg(msg)
+        self.shouldRun = shouldRun
 
     def toMsg(self, sync=28, area=0, command=0, data=[0, 0, 0], join=255):
         bytes = []
@@ -196,12 +197,13 @@ class DynetControl(object):
         self._dynet.write(packet)
         self.request_channel_level(area=area, channel=channel)
 
-    def request_channel_level(self, area, channel):
-        self._loop.create_task(self._request_channel_level(area=area, channel=channel))
+    def request_channel_level(self, area, channel, shouldRun=None):
+        self._logger.debug("XXX request_channel_level area=%s channel=%s" % (area, channel))
+        return self._loop.create_task(self._request_channel_level(area=area, channel=channel, shouldRun=shouldRun))
 
     @asyncio.coroutine
-    def _request_channel_level(self, area, channel):
-        packet = DynetPacket()
+    def _request_channel_level(self, area, channel, shouldRun):
+        packet = DynetPacket(shouldRun=shouldRun)
         packet.toMsg(
             sync=28,
             area=area,
@@ -241,12 +243,12 @@ class DynetControl(object):
         )
         self._dynet.write(packet)
 
-    def request_area_preset(self, area):
-        self._loop.create_task(self._request_area_preset(area=area))
+    def request_area_preset(self, area, shouldRun=None):
+        self._loop.create_task(self._request_area_preset(area=area, shouldRun=shouldRun))
 
     @asyncio.coroutine
-    def _request_area_preset(self, area):
-        packet = DynetPacket()
+    def _request_area_preset(self, area, shouldRun):
+        packet = DynetPacket(shouldRun=shouldRun)
         packet.toMsg(
             sync=28,
             area=area,
@@ -459,25 +461,28 @@ class Dynet(object):
         if len(self._outBuffer) == 0:
             return
 
-        self._sending = True
         packet = self._outBuffer[0]
-        msg = bytearray()
-        msg.append(packet.sync)
-        msg.append(packet.area)
-        msg.append(packet.data[0])
-        msg.append(packet.command)
-        msg.append(packet.data[1])
-        msg.append(packet.data[2])
-        msg.append(packet.join)
-        msg.append(packet.chk)
-        try:
-            self._transport.write(msg)
-            self._logger.debug("Dynet Sent: %s" % msg)
-        except:
-            self._logger.error("Unable to write data: %s" % msg)
-        del self._outBuffer[0]
-        self._lastSent = int(round(time.time() * 1000))
-        self._sending = False
+        if packet.shouldRun is None or packet.shouldRun():
+            self._sending = True
+            msg = bytearray()
+            msg.append(packet.sync)
+            msg.append(packet.area)
+            msg.append(packet.data[0])
+            msg.append(packet.command)
+            msg.append(packet.data[1])
+            msg.append(packet.data[2])
+            msg.append(packet.join)
+            msg.append(packet.chk)
+            try:
+                self._transport.write(msg)
+                self._logger.debug("Dynet Sent: %s" % msg)
+            except:
+                self._logger.error("Unable to write data: %s" % msg)
+            self._lastSent = int(round(time.time() * 1000))
+            self._sending = False
+        else:
+            self._logger.debug("XXX aborting")
 
+        del self._outBuffer[0]
         if len(self._outBuffer) > 0:
             self._loop.call_later(self._messageDelay / 1000, self.write)
