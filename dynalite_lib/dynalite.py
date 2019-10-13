@@ -8,7 +8,6 @@
 
 import asyncio
 import logging
-import json
 from .dynet import Dynet, DynetControl
 from .event import DynetEvent
 
@@ -50,27 +49,42 @@ from .const import (
 
 
 class BroadcasterError(Exception):
+    """Class to handle errors with Broadcaster object."""
+
     def __init__(self, message):
+        """Initialize the error."""
         self.message = message
 
 
 class PresetError(Exception):
+    """Class to handle errors with a Dynalite preset."""
+
     def __init__(self, message):
+        """Initialize the error."""
         self.message = message
 
 
 class ChannelError(Exception):
+    """Class to handle errors with a Dynalite channel."""
+
     def __init__(self, message):
+        """Initialize the error."""
         self.message = message
 
 
 class AreaError(Exception):
+    """Class to handle errors with a Dynalite area."""
+
     def __init__(self, message):
+        """Initialize the error."""
         self.message = message
 
 
 class DynaliteConfig(object):
+    """Class for the configuration of the Dynalite network."""
+
     def __init__(self, config=None):
+        """Initialize the configuration from Dict."""
         self.log_level = (
             config[CONF_LOGLEVEL].upper() if CONF_LOGLEVEL in config else logging.INFO
         )
@@ -93,7 +107,10 @@ class DynaliteConfig(object):
 
 
 class Broadcaster(object):
+    """Class to broadcast event to listeners."""
+
     def __init__(self, listenerFunction=None, loop=None, logger=None):
+        """Initialize the broadcaster."""
         if listenerFunction is None:
             raise BroadcasterError("A broadcaster bust have a listener Function")
         self._listenerFunction = listenerFunction
@@ -102,6 +119,7 @@ class Broadcaster(object):
         self.logger = logger
 
     def monitorEvent(self, eventType=None):
+        """Set broadcaster to monitor an event or all."""
         if eventType is None:
             raise BroadcasterError("Must supply an event type to monitor")
         eventType = eventType.upper()
@@ -109,6 +127,7 @@ class Broadcaster(object):
             self._monitoredEvents.append(eventType.upper())
 
     def unmonitorEvent(self, eventType=None):
+        """Stop monitoring an event."""
         if eventType is None:
             raise BroadcasterError("Must supply an event type to un-monitor")
         eventType = eventType.upper()
@@ -116,6 +135,7 @@ class Broadcaster(object):
             self._monitoredEvents.remove(eventType.upper())
 
     def update(self, event=None, dynalite=None):
+        """Update listener with an event if relevant."""
         if event is None:
             return
         if (
@@ -130,10 +150,13 @@ class Broadcaster(object):
 
     @asyncio.coroutine
     def _callUpdater(self, event=None, dynalite=None):
+        """Call listener callback function."""
         self._listenerFunction(event=event, dynalite=dynalite)
 
 
 class DynalitePreset(object):
+    """Class to represent a Dynalite area preset."""
+
     def __init__(
         self,
         name=None,
@@ -144,6 +167,7 @@ class DynalitePreset(object):
         area=None,
         dynetControl=None,
     ):
+        """Initialize the preset."""
         if not value:
             raise PresetError("A preset must have a value")
         self.logger = logger
@@ -166,6 +190,7 @@ class DynalitePreset(object):
             )
 
     def turnOn(self, sendDynet=True, sendMQTT=True):
+        """Turn the preset on."""
         self.active = True
         if self.area:
             self.area.activePreset = self.value
@@ -190,6 +215,7 @@ class DynalitePreset(object):
         self.area.requestAllChannelLevels(delay=INITIAL_RETRY_DELAY, immediate=False)
 
     def turnOff(self, sendDynet=True, sendMQTT=True):
+        """Turn the preset off."""
         self.active = False
         if sendMQTT and self.broadcastFunction:
             broadcastData = {
@@ -208,6 +234,8 @@ class DynalitePreset(object):
 
 
 class DynaliteChannel(object):
+    """Class to represent a Dynalite channel."""
+
     def __init__(
         self,
         name=None,
@@ -219,6 +247,7 @@ class DynaliteChannel(object):
         area=None,
         dynetControl=None,
     ):
+        """Initialize the channel."""
         logger.debug(
             "DynaliteChannel init called area=%s channel=%s fade=%s"
             % (area.value, value, fade)
@@ -249,6 +278,7 @@ class DynaliteChannel(object):
         )  # ask for the initial level, but don't resend quickly because the network may still be waiting
 
     def turnOn(self, brightness=1.0, sendDynet=True, sendMQTT=True):
+        """Turn the channel on or set it to a specific brightness level."""
         if sendDynet and self._control:
             self._control.setChannel(
                 area=self.area.value,
@@ -258,51 +288,51 @@ class DynaliteChannel(object):
             )
 
     def turnOff(self, sendDynet=True, sendMQTT=True):
+        """Turn the channel off."""
         if sendDynet and self._control:
             self._control.setChannel(
                 area=self.area.value, channel=self.value, level=0, fade=self.fade
             )
 
     def requestChannelLevel(self, delay=None):
+        """Request the channel level."""
         self.area.requestChannelLevel(self.value, delay=delay)
 
     def stopFade(self):
+        """Stop fading of the channel."""
         self._control.stop_channel_fade(area=self.area.value, channel=self.value)
 
     def getLevel(self):
+        """Get current channel level."""
         return self.level
 
     def setLevel(self, level):
+        """Set current channel level."""
         self.level = level
 
 
-# helper class to ensure that requests to Dynet for current preset or current channel level get retried
-# but there is only one of each running at each time
 class RequestCounter:
+    """Helper class to ensure that requests to Dynet for current preset or current channel level get retried but there is only one of each running at each time."""
+
     def __init__(self, loop, logger=None):
+        """Initialize the class."""
         self.loop = loop
         self.logger = logger
         self.counter = 0
         self.timer = None
 
     def update(self):
+        """Update that a new value arrive, so current requests can be cancelled."""
         if self.timer:
             self.timer.cancel()
             self.timer = None
         self.counter += 1
 
     def timerCallback(self, counter, delay, func, *args):
+        """Send request if update was not yet received."""
         self.timer = None
         if self.counter > counter:  # already updated after the timer was scheduled
-            self.logger.debug(
-                "XXX timerCallback - doing nothing counter=%s delay=%s func=%s, args=%s"
-                % (counter, delay, func, args)
-            )
             return
-        self.logger.debug(
-            "XXX timerCallback counter=%s delay=%s func=%s, args=%s"
-            % (counter, delay, func, args)
-        )
         func(*args)
         newDelay = min(delay * 2, MAXIMUM_RETRY_DELAY)
         self.timer = self.loop.call_later(
@@ -310,6 +340,7 @@ class RequestCounter:
         )
 
     def schedule(self, delay, immediate, func, *args):
+        """Schedule a request until an update arrives with an initial delay and either immediate or not."""
         if self.timer:
             self.timer.cancel()
         if immediate:
@@ -322,6 +353,8 @@ class RequestCounter:
 
 
 class DynaliteArea(object):
+    """Class to represent a Dynalite area."""
+
     def __init__(
         self,
         name=None,
@@ -338,6 +371,7 @@ class DynaliteArea(object):
         broadcastFunction=None,
         dynetControl=None,
     ):
+        """Initialize the area."""
         if not value:
             raise PresetError("An area must have a value")
         self.loop = loop
@@ -438,6 +472,7 @@ class DynaliteArea(object):
             self.channel = {}
 
     def presetOn(self, preset, sendDynet=True, sendMQTT=True, autodiscover=False):
+        """Turn a selected preset on and everyone else off."""
         if hasattr(self, "onPreset"):
             if self.onPreset == preset:
                 self.state = self._onName
@@ -459,6 +494,7 @@ class DynaliteArea(object):
     def presetOff(
         self, preset, sendDynet=True, sendMQTT=True
     ):  # XXX TODO check if this is used anywhere. generally presets cannot be turned off
+        """Turn a selected preset off."""
         if preset not in self.preset:
             return  # XXX if we want it to auto-register presets need to fix race condition
             self.preset[preset] = DynalitePreset(
@@ -473,15 +509,23 @@ class DynaliteArea(object):
             self.preset[preset].turnOff(sendDynet=sendDynet, sendMQTT=sendMQTT)
 
     def requestPreset(self, delay=INITIAL_RETRY_DELAY, immediate=True):
+        """Request the preset for the area."""
+
         def shouldRun():
+            """Return whether or not command is still relevant."""
             return self.presetUpdateCounter.counter == currentCounter
-            
+
         currentCounter = self.presetUpdateCounter.counter
         self.presetUpdateCounter.schedule(
-            delay, immediate, self._dynetControl.request_area_preset, self.value, shouldRun
+            delay,
+            immediate,
+            self._dynetControl.request_area_preset,
+            self.value,
+            shouldRun,
         )
 
     def setChannelLevel(self, channel, level, autodiscover=False):
+        """Set a channel in an area to a given level. Create it if necessary."""
         if channel in self.channelUpdateCounter:
             self.channelUpdateCounter[channel].update()
         if channel not in self.channel:
@@ -498,9 +542,12 @@ class DynaliteArea(object):
         self.channel[channel].setLevel(level)
 
     def requestChannelLevel(self, channel, delay=INITIAL_RETRY_DELAY, immediate=True):
+        """Request the level of a specific channel."""
+
         def shouldRun():
+            """Return whether or not command is still relevant."""
             return self.channelUpdateCounter[channel].counter == currentCounter
-            
+
         if channel not in self.channelUpdateCounter:
             self.channelUpdateCounter[channel] = RequestCounter(self.loop, self.logger)
         currentCounter = self.channelUpdateCounter[channel].counter
@@ -510,17 +557,21 @@ class DynaliteArea(object):
             self._dynetControl.request_channel_level,
             self.value,
             channel,
-            shouldRun
+            shouldRun,
         )
 
     def requestAllChannelLevels(self, delay=INITIAL_RETRY_DELAY, immediate=True):
+        """Request channel levels for all channels in an area."""
         if self.channel:
             for channel in self.channel:
                 self.requestChannelLevel(channel, delay, immediate)
 
 
 class Dynalite(object):
+    """Class to represent the interaction with Dynalite."""
+
     def __init__(self, config=None, loop=None, logger=None):
+        """Initialize the class."""
         self.loop = loop if loop else asyncio.get_event_loop()
         self.logger = logger if logger else logging.getLogger(__name__)
         self._config = DynaliteConfig(config=config)
@@ -538,10 +589,12 @@ class Dynalite(object):
         self.control = None
 
     def start(self):
+        """Queue request to start the class."""
         self.loop.create_task(self._start())
 
     @asyncio.coroutine
     def _start(self):
+        """Start the class."""
         self._dynet = Dynet(
             host=self._config.host,
             port=self._config.port,
@@ -558,27 +611,33 @@ class Dynalite(object):
             self.loop.create_task(self._configure())
 
     def connect(self):
+        """Queue command to connect to Dynet."""
         self.loop.create_task(self._connect())
 
     @asyncio.coroutine
     def _connect(self):
+        """Connect to Dynet."""
         self._dynet.connect()
 
     @asyncio.coroutine
     def _connected(self, dynet=None, transport=None):
+        """Handle a successful connection."""
         self.broadcast(DynetEvent(eventType=EVENT_CONNECTED, data={}))
 
     @asyncio.coroutine
     def _disconnection(self, dynet=None):
+        """Handle a disconnection and try to reconnect."""
         self.broadcast(DynetEvent(eventType=EVENT_DISCONNECTED, data={}))
         yield from asyncio.sleep(1)  # Don't overload the network
         self.connect()
 
     def processTraffic(self, event):
+        """Process an event that arrived from Dynet - queue."""
         self.loop.create_task(self._processTraffic(event))
 
     @asyncio.coroutine
     def _processTraffic(self, event):
+        """Process an event that arrived from Dynet - async."""
         # The logic here is:
         # - new area is created - ask for the current preset
         # - preset selected - turn the preset on but don't send it as a command
@@ -664,15 +723,18 @@ class Dynalite(object):
         self.broadcast(event)
 
     def broadcast(self, event):
+        """Broadcast an event to all listeners - queue."""
         self.loop.create_task(self._broadcast(event))
 
     @asyncio.coroutine
     def _broadcast(self, event):
+        """Broadcast an event to all listeners - async."""
         for listenerFunction in self._listeners:
             listenerFunction.update(event=event, dynalite=self)
 
     @asyncio.coroutine
     def _configure(self):
+        """Configure the class from saved config attribute."""
         self._autodiscover = self._config.autodiscover
         self._polltimer = self._config.polltimer
         for areaValue in self._config.area:
@@ -705,7 +767,7 @@ class Dynalite(object):
             )
             if (
                 CONF_NODEFAULT in self._config.area[areaValue]
-                and self._config.area[areaValue][CONF_NODEFAULT] == True
+                and self._config.area[areaValue][CONF_NODEFAULT]
             ):
                 defaultPresets = None
             else:
@@ -731,11 +793,12 @@ class Dynalite(object):
         self.broadcast(DynetEvent(eventType=EVENT_CONFIGURED, data={}))
 
     def state(self):
+        """Create the state for testing - queue."""
         self.loop.create_task(self._state())
 
     @asyncio.coroutine
     def _state(self):
-        aaa=bbb # XXX raise exception
+        """Create the state for testing - async."""
         for areaValue in self.devices[CONF_AREA]:
             area = self.devices[CONF_AREA][areaValue]
             for presetValue in area.preset:
@@ -757,6 +820,7 @@ class Dynalite(object):
             self.control.areaReqPreset(area.value)
 
     def addListener(self, listenerFunction=None):
+        """Create a new listener to the class."""
         broadcaster = Broadcaster(
             listenerFunction=listenerFunction, loop=self.loop, logger=self.logger
         )

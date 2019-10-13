@@ -29,10 +29,14 @@ from .const import (
 
 
 class DynetInbound(object):
+    """Class to handle inboud Dynet packets."""
+
     def __init__(self):
+        """Initialize the object."""
         self._logger = None
 
     def preset(self, packet):
+        """Handle a preset that was selected."""
         if packet.command > 3:
             packet.preset = packet.command - 6
         else:
@@ -56,30 +60,39 @@ class DynetInbound(object):
         )
 
     def preset_1(self, packet):
+        """Handle preset 1 in banks of 8."""
         return self.preset(packet)
 
     def preset_2(self, packet):
+        """Handle preset 2 in banks of 8."""
         return self.preset(packet)
 
     def preset_3(self, packet):
+        """Handle preset 3 in banks of 8."""
         return self.preset(packet)
 
     def preset_4(self, packet):
+        """Handle preset 4 in banks of 8."""
         return self.preset(packet)
 
     def preset_5(self, packet):
+        """Handle preset 5 in banks of 8."""
         return self.preset(packet)
 
     def preset_6(self, packet):
+        """Handle preset 6 in banks of 8."""
         return self.preset(packet)
 
     def preset_7(self, packet):
+        """Handle preset 7 in banks of 8."""
         return self.preset(packet)
 
     def preset_8(self, packet):
+        """Handle preset 8 in banks of 8."""
         return self.preset(packet)
 
     def request_preset(self, packet):
+        """Report that preset was requested."""
         return DynetEvent(
             eventType=EVENT_REQPRESET,
             message=("Request Area %d preset" % (packet.area)),
@@ -88,6 +101,7 @@ class DynetInbound(object):
         )
 
     def report_preset(self, packet):
+        """Report the current preset of an area."""
         packet.preset = packet.data[0] + 1
         return DynetEvent(
             eventType=EVENT_PRESET,
@@ -102,6 +116,7 @@ class DynetInbound(object):
         )
 
     def linear_preset(self, packet):
+        """Report that preset was selected with fade."""
         packet.preset = packet.data[0] + 1
         packet.fade = (packet.data[1] + (packet.data[2] * 256)) * 0.02
         return DynetEvent(
@@ -121,6 +136,7 @@ class DynetInbound(object):
         )
 
     def report_channel_level(self, packet):
+        """Report the new level of a channel."""
         channel = packet.data[0] + 1
         target_level = packet.data[1]
         actual_level = packet.data[2]
@@ -143,6 +159,7 @@ class DynetInbound(object):
         )
 
     def set_channel_x_to_level_with_fade(self, packet, channel_offset):
+        """Report that a channel was set to a specific level."""
         channel = ((packet.data[1] + 1) % 256) * 4 + channel_offset
         target_level = packet.data[0]
         return DynetEvent(
@@ -163,21 +180,27 @@ class DynetInbound(object):
         )
 
     def set_channel_1_to_level_with_fade(self, packet):
+        """Report that channel 1 was set to a specific level."""
         return self.set_channel_x_to_level_with_fade(packet, 1)
 
     def set_channel_2_to_level_with_fade(self, packet):
+        """Report that channel 2 was set to a specific level."""
         return self.set_channel_x_to_level_with_fade(packet, 2)
 
     def set_channel_3_to_level_with_fade(self, packet):
+        """Report that channel 3 was set to a specific level."""
         return self.set_channel_x_to_level_with_fade(packet, 3)
 
     def set_channel_4_to_level_with_fade(self, packet):
+        """Report that channel 4 was set to a specific level."""
         return self.set_channel_x_to_level_with_fade(packet, 4)
 
     def request_channel_level(self, packet):
+        """Do nothing."""
         return
 
     def stop_fading(self, packet):
+        """Report that fading stopped for a channel or area."""
         channel = packet.data[0] + 1
         if channel == 256:  # all channels in area
             channel = CONF_ALL
@@ -195,6 +218,7 @@ class DynetInbound(object):
         )
 
     def fade_channel_area_to_preset(self, packet):
+        """Report that a channel or area was set to a preset."""
         channel = packet.data[0] + 1
         packet.preset = packet.data[1] + 1
         packet.fade = packet.data[2] * 0.02
