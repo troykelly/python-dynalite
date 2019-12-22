@@ -182,7 +182,9 @@ class DynetControl(object):
 
     def areaPreset(self, area, preset, fade=2):
         """Area preset was set - queue."""
-        self._loop.create_task(self._areaPreset(area=area, preset=preset, fade=fade))
+        return self._loop.create_task(
+            self._areaPreset(area=area, preset=preset, fade=fade)
+        )
 
     @asyncio.coroutine
     def _areaPreset(self, area, preset, fade):
@@ -202,7 +204,7 @@ class DynetControl(object):
 
     def setChannel(self, area, channel, level, fade=2):
         """Set a channel to a given level - queue."""
-        self._loop.create_task(
+        return self._loop.create_task(
             self._setChannel(area=area, channel=channel, level=level, fade=fade)
         )
 
@@ -228,7 +230,7 @@ class DynetControl(object):
 
     def request_channel_level(self, area, channel, shouldRun=None):
         """Request a level for a specific channel. - queue."""
-        self._loop.create_task(
+        return self._loop.create_task(
             self._request_channel_level(area=area, channel=channel, shouldRun=shouldRun)
         )
 
@@ -247,7 +249,9 @@ class DynetControl(object):
 
     def stop_channel_fade(self, area, channel):
         """Stop fading of a channel - queue."""
-        self._loop.create_task(self._stop_channel_fade(area=area, channel=channel))
+        return self._loop.create_task(
+            self._stop_channel_fade(area=area, channel=channel)
+        )
 
     @asyncio.coroutine
     def _stop_channel_fade(self, area, channel):
@@ -264,7 +268,7 @@ class DynetControl(object):
 
     def areaOff(self, area, fade=2):
         """Turn an area off - queue."""
-        self._loop.create_task(self._areaOff(area=area, fade=fade))
+        return self._loop.create_task(self._areaOff(area=area, fade=fade))
 
     @asyncio.coroutine
     def _areaOff(self, area, fade):
@@ -281,7 +285,7 @@ class DynetControl(object):
 
     def request_area_preset(self, area, shouldRun=None):
         """Request current preset of an area - queue."""
-        self._loop.create_task(
+        return self._loop.create_task(
             self._request_area_preset(area=area, shouldRun=shouldRun)
         )
 
@@ -349,7 +353,7 @@ class Dynet(object):
 
     def connect(self, onConnect=None):
         """Connect to Dynet - queue."""
-        asyncio.ensure_future(self._connect())
+        return self._loop.create_task(self._connect())
 
     async def _connect(self):
         """Connect to Dynet - async."""
@@ -410,9 +414,7 @@ class Dynet(object):
                         packet = None
 
             if packet is None:
-                hexString = ":".join(
-                    "{:02x}".format(ord(c)) for c in self._inBuffer[:8]
-                )
+                hexString = ":".join("{:02x}".format(c) for c in self._inBuffer[:8])
                 self._logger.debug(
                     "Unable to process packet %s - moving one byte forward" % hexString
                 )
