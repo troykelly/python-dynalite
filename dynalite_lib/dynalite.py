@@ -45,6 +45,7 @@ from .const import (
     STARTUP_RETRY_DELAY,
     INITIAL_RETRY_DELAY,
     MAXIMUM_RETRY_DELAY,
+    CONF_ACTIVE,
 )
 
 
@@ -104,6 +105,7 @@ class DynaliteConfig(object):
         self.polltimer = (
             config[CONF_POLLTIMER] if CONF_POLLTIMER in config else 1
         )  # default poll 1 sec
+        self.active = config[CONF_ACTIVE] if CONF_ACTIVE in config else False
 
 
 class Broadcaster(object):
@@ -212,7 +214,10 @@ class DynalitePreset(object):
             if self.value != preset:
                 if self.area.preset[preset].active:
                     self.area.preset[preset].turnOff(sendDynet=False, sendMQTT=True)
-        self.area.requestAllChannelLevels(delay=INITIAL_RETRY_DELAY, immediate=False)
+        if self._control.active:
+            self.area.requestAllChannelLevels(delay=INITIAL_RETRY_DELAY, immediate=False)
+        else:
+            pass # XXX need to move them to default by preset
 
     def turnOff(self, sendDynet=True, sendMQTT=True):
         """Turn the preset off."""
@@ -273,9 +278,10 @@ class DynaliteChannel(object):
             self.broadcastFunction(
                 DynetEvent(eventType=EVENT_NEWCHANNEL, data=broadcastData)
             )
-        self.requestChannelLevel(
-            delay=STARTUP_RETRY_DELAY
-        )  # ask for the initial level, but don't resend quickly because the network may still be waiting
+        if self._control.active:
+            self.requestChannelLevel(
+                delay=STARTUP_RETRY_DELAY
+            )  # ask for the initial level, but don't resend quickly because the network may still be waiting
 
     def turnOn(self, brightness=1.0, sendDynet=True, sendMQTT=True):
         """Turn the channel on or set it to a specific brightness level."""
@@ -286,17 +292,32 @@ class DynaliteChannel(object):
                 level=brightness,
                 fade=self.fade,
             )
+        if self._control.active:
+            self.requestChannelLevel()
+        else:
+            self.setLevel(brightness)
+            if self.broadcastFunction or True:
+                broadcastData = {
+                    CONF_AREA: self.area.value,
+                    CONF_CHANNEL: self.value,
+                    CONF_NAME: self.area.name + " " + self.name,
+                    CONF_TRGT_LEVEL: 255 - 254.0 * self.level,
+                    CONF_ACTION: CONF_ACTION_CMD,
+                }
+                self.broadcastFunction(
+                    DynetEvent(eventType=EVENT_CHANNEL, data=broadcastData)
+                )
 
     def turnOff(self, sendDynet=True, sendMQTT=True):
         """Turn the channel off."""
-        if sendDynet and self._control:
-            self._control.setChannel(
-                area=self.area.value, channel=self.value, level=0, fade=self.fade
-            )
+        self.turnOn(0, sendDynet, sendMQTT)
 
     def requestChannelLevel(self, delay=None):
         """Request the channel level."""
-        self.area.requestChannelLevel(self.value, delay=delay)
+        if delay:
+            self.area.requestChannelLevel(self.value, delay=delay)
+        else:
+            self.area.requestChannelLevel(self.value)
 
     def stopFade(self):
         """Stop fading of the channel."""
@@ -404,8 +425,9 @@ class DynaliteArea(object):
 
         self.broadcastFunction = broadcastFunction
         self._dynetControl = dynetControl
-
-        self.requestPreset(delay=STARTUP_RETRY_DELAY)  # ask for the initial preset
+        
+        if self._dynetControl.active:
+            self.requestPreset(delay=STARTUP_RETRY_DELAY)  # ask for the initial preset
 
         if areaPresets:
             for presetValue in areaPresets:
@@ -598,13 +620,14 @@ class Dynalite(object):
         self._dynet = Dynet(
             host=self._config.host,
             port=self._config.port,
+            active=self._config.active,
             loop=self.loop,
             broadcaster=self.processTraffic,
             onConnect=self._connected,
             onDisconnect=self._disconnection,
         )
         self.control = DynetControl(
-            self._dynet, self.loop, areaDefinition=self.devices[CONF_AREA]
+            self._dynet, self.loop, self._config.active, areaDefinition=self.devices[CONF_AREA]
         )
         self.connect()  # connect asynchronously. not needed to register devices
         if not self._configured:
@@ -681,17 +704,25 @@ class Dynalite(object):
             curArea.presetUpdateCounter.update()
         elif event.eventType == EVENT_CHANNEL:
             if event.data[CONF_ACTION] == CONF_ACTION_REPORT:
-                curArea.setChannelLevel(
-                    event.data[CONF_CHANNEL],
-                    (255 - event.data[CONF_ACT_LEVEL]) / 254.0,
-                    self._autodiscover,
-                )
-                if event.data[CONF_ACT_LEVEL] != event.data[CONF_TRGT_LEVEL]:
-                    self.loop.call_later(
-                        self._polltimer,
-                        curArea.requestChannelLevel,
+                if self._config.active:
+                    curArea.setChannelLevel(
                         event.data[CONF_CHANNEL],
+                        (255 - event.data[CONF_ACT_LEVEL]) / 254.0,
+                        self._autodiscover,
                     )
+                    if event.data[CONF_ACT_LEVEL] != event.data[CONF_TRGT_LEVEL]:
+                        self.loop.call_later(
+                            self._polltimer,
+                            curArea.requestChannelLevel,
+                            event.data[CONF_CHANNEL],
+                        )
+                else:
+                    curArea.setChannelLevel(
+                        event.data[CONF_CHANNEL],
+                        (255 - event.data[CONF_TRGT_LEVEL]) / 254.0,
+                        self._autodiscover,
+                    )
+                    
             elif event.data[CONF_ACTION] == CONF_ACTION_CMD:
                 target_level = False
                 if CONF_PRESET in event.data:
@@ -711,10 +742,11 @@ class Dynalite(object):
                     curArea.setChannelLevel(
                         event.data[CONF_CHANNEL], target_level, self._autodiscover
                     )
-                if event.data[CONF_CHANNEL] == CONF_ALL:
-                    curArea.requestAllChannelLevels()
-                else:
-                    curArea.requestChannelLevel(event.data[CONF_CHANNEL])
+                if self._config.active:
+                    if event.data[CONF_CHANNEL] == CONF_ALL:
+                        curArea.requestAllChannelLevels()
+                    else:
+                        curArea.requestChannelLevel(event.data[CONF_CHANNEL])
             else:
                 self.logger.warning("CHANNEL command unknown cmd: %s" % event.toJson)
         else:

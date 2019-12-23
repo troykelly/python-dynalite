@@ -173,10 +173,11 @@ class DynetConnection(asyncio.Protocol):
 class DynetControl(object):
     """Class to control devices on Dynet network."""
 
-    def __init__(self, dynet, loop, areaDefinition=None, logger=DEFAULT_LOG):
+    def __init__(self, dynet, loop, active, areaDefinition=None, logger=DEFAULT_LOG):
         """Initialize the class."""
         self._dynet = dynet
         self._loop = loop
+        self.active = active
         self._area = areaDefinition
         self._logger = logger
 
@@ -226,7 +227,6 @@ class DynetControl(object):
             join=255,
         )
         self._dynet.write(packet)
-        self.request_channel_level(area=area, channel=channel)
 
     def request_channel_level(self, area, channel, shouldRun=None):
         """Request a level for a specific channel. - queue."""
@@ -310,6 +310,7 @@ class Dynet(object):
         self,
         host=None,
         port=None,
+        active=False,
         broadcaster=None,
         onConnect=None,
         onDisconnect=None,
@@ -341,6 +342,7 @@ class Dynet(object):
         self._inBuffer = []
         self._outBuffer = []
         self._timeout = 30
+        self.active = active
 
         self._lastSent = None
         self._messageDelay = 200
@@ -525,6 +527,7 @@ class Dynet(object):
             msg.append(packet.data[2])
             msg.append(packet.join)
             msg.append(packet.chk)
+            assert self.active or packet.command not in [OpcodeType.REQUEST_CHANNEL_LEVEL.value, OpcodeType.REQUEST_PRESET.value]
             self._transport.write(msg)
             self._logger.debug("Dynet Sent: %s" % msg)
             self._lastSent = int(round(time.time() * 1000))
