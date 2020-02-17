@@ -25,7 +25,7 @@ from .const import (
     CONF_STATE_OFF,
     CONF_LEVEL,
     CONF_PRESET,
-    CONF_AUTODISCOVER,
+    CONF_AUTO_DISCOVER,
     CONF_POLLTIMER,
     CONF_CHANNEL,
     CONF_NODEFAULT,
@@ -100,7 +100,7 @@ class DynaliteConfig(object):
         self.area = config[CONF_AREA] if CONF_AREA in config else {}
         self.preset = config[CONF_PRESET] if CONF_PRESET in config else {}
         self.autodiscover = (
-            config[CONF_AUTODISCOVER] if CONF_AUTODISCOVER in config else True
+            config[CONF_AUTO_DISCOVER] if CONF_AUTODISCOVER in config else True
         )  # autodiscover by default
         self.polltimer = (
             config[CONF_POLLTIMER] if CONF_POLLTIMER in config else 1
