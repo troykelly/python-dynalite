@@ -45,7 +45,10 @@ from .const import (
     STARTUP_RETRY_DELAY,
     INITIAL_RETRY_DELAY,
     MAXIMUM_RETRY_DELAY,
+    NO_RETRY_DELAY_VALUE,
     CONF_ACTIVE,
+    CONF_ACTIVE_ON,
+    CONF_ACTIVE_INIT,
 )
 
 
@@ -184,7 +187,7 @@ class DynalitePreset(object):
             broadcastData = {
                 CONF_AREA: self.area.value,
                 CONF_PRESET: self.value,
-                CONF_NAME: self.area.name + " " + self.name,
+                CONF_NAME: self.name,
                 CONF_STATE: "OFF",
             }
             self.broadcastFunction(
@@ -200,7 +203,7 @@ class DynalitePreset(object):
             broadcastData = {
                 CONF_AREA: self.area.value,
                 CONF_PRESET: self.value,
-                CONF_NAME: self.area.name + " " + self.name,
+                CONF_NAME: self.name,
                 CONF_STATE: CONF_STATE_ON,
             }
             self.broadcastFunction(
@@ -214,7 +217,7 @@ class DynalitePreset(object):
             if self.value != preset:
                 if self.area.preset[preset].active:
                     self.area.preset[preset].turnOff(sendDynet=False, sendMQTT=True)
-        if self._control.active:
+        if self._control.active == CONF_ACTIVE_ON:
             self.area.requestAllChannelLevels(delay=INITIAL_RETRY_DELAY, immediate=False)
         else:
             pass # XXX need to move them to default by preset
@@ -226,7 +229,7 @@ class DynalitePreset(object):
             broadcastData = {
                 CONF_AREA: self.area.value,
                 CONF_PRESET: self.value,
-                CONF_NAME: self.area.name + " " + self.name,
+                CONF_NAME: self.name,
                 CONF_STATE: CONF_STATE_OFF,
             }
             self.broadcastFunction(
@@ -272,17 +275,22 @@ class DynaliteChannel(object):
             broadcastData = {
                 CONF_AREA: self.area.value,
                 CONF_CHANNEL: self.value,
-                CONF_NAME: self.area.name + " " + self.name,
+                CONF_NAME: self.name,
                 CONF_LEVEL: self.level,
             }
             self.broadcastFunction(
                 DynetEvent(eventType=EVENT_NEWCHANNEL, data=broadcastData)
             )
-        if self._control.active:
+        if self._control.active == CONF_ACTIVE_ON:
             self.requestChannelLevel(
                 delay=STARTUP_RETRY_DELAY
             )  # ask for the initial level, but don't resend quickly because the network may still be waiting
-
+        elif self._control.active == CONF_ACTIVE_INIT:
+            self.requestChannelLevel(
+                delay=NO_RETRY_DELAY_VALUE
+            )  # ask for the initial level, but don't retry
+            
+            
     def turnOn(self, brightness=1.0, sendDynet=True, sendMQTT=True):
         """Turn the channel on or set it to a specific brightness level."""
         if sendDynet and self._control:
@@ -300,7 +308,7 @@ class DynaliteChannel(object):
                 broadcastData = {
                     CONF_AREA: self.area.value,
                     CONF_CHANNEL: self.value,
-                    CONF_NAME: self.area.name + " " + self.name,
+                    CONF_NAME: self.name,
                     CONF_TRGT_LEVEL: 255 - 254.0 * self.level,
                     CONF_ACTION: CONF_ACTION_CMD,
                 }
@@ -362,6 +370,9 @@ class RequestCounter:
 
     def schedule(self, delay, immediate, func, *args):
         """Schedule a request until an update arrives with an initial delay and either immediate or not."""
+        if delay == NO_RETRY_DELAY_VALUE:
+            func(*args)
+            return
         if self.timer:
             self.timer.cancel()
         if immediate:
@@ -426,9 +437,11 @@ class DynaliteArea(object):
         self.broadcastFunction = broadcastFunction
         self._dynetControl = dynetControl
         
-        if self._dynetControl.active:
+        if self._dynetControl.active == CONF_ACTIVE_ON:
             self.requestPreset(delay=STARTUP_RETRY_DELAY)  # ask for the initial preset
-
+        elif self._dynetControl.active == CONF_ACTIVE_INIT:
+            self.requestPreset(delay=NO_RETRY_DELAY_VALUE)  # no retry
+        
         if areaPresets:
             for presetValue in areaPresets:
                 preset = areaPresets[presetValue]
@@ -462,11 +475,12 @@ class DynaliteArea(object):
             for channelValue in areaChannels:
                 if (int(channelValue) >= 1) and (int(channelValue) <= 255):
                     channel = areaChannels[channelValue]
-                    name = (
+                    specific_name = (
                         channel[CONF_NAME]
                         if channel and (CONF_NAME in channel)
                         else "Channel " + channelValue
                     )
+                    name = self.name + " " + specific_name
                     fade = (
                         channel[CONF_FADE]
                         if channel and (CONF_FADE in channel)
@@ -704,7 +718,7 @@ class Dynalite(object):
             curArea.presetUpdateCounter.update()
         elif event.eventType == EVENT_CHANNEL:
             if event.data[CONF_ACTION] == CONF_ACTION_REPORT:
-                if self._config.active:
+                if self._config.active == CONF_ACTIVE_ON:
                     curArea.setChannelLevel(
                         event.data[CONF_CHANNEL],
                         (255 - event.data[CONF_ACT_LEVEL]) / 254.0,
@@ -742,7 +756,7 @@ class Dynalite(object):
                     curArea.setChannelLevel(
                         event.data[CONF_CHANNEL], target_level, self._autodiscover
                     )
-                if self._config.active:
+                if self._config.active == CONF_ACTIVE_ON:
                     if event.data[CONF_CHANNEL] == CONF_ALL:
                         curArea.requestAllChannelLevels()
                     else:

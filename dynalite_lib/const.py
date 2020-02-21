@@ -11,6 +11,9 @@ CONF_ACTION = "action"
 CONF_ACTION_CMD = "cmd"
 CONF_ACTION_REPORT = "report"
 CONF_ACTIVE = "active"
+CONF_ACTIVE_ON = "on"
+CONF_ACTIVE_OFF = "off"
+CONF_ACTIVE_INIT = "init"
 CONF_ALL = "ALL"
 CONF_AREA = "area"
 CONF_CHANNEL = "channel"
@@ -48,7 +51,8 @@ INITIAL_RETRY_DELAY = 1
 STARTUP_RETRY_DELAY = 60
 # Minimal retry frequency in seconds - default 1 hour, so if something never answers, it will be pinged once an hour XXX consider changing
 MAXIMUM_RETRY_DELAY = 60 * 60
-
+# no retry value for delay
+NO_RETRY_DELAY_VALUE = -1
 
 class SyncType(Enum):
     """Types of Sync Code."""

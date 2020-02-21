@@ -10,7 +10,7 @@ import asyncio
 import logging
 import json
 import time
-from .const import OpcodeType, SyncType
+from .const import OpcodeType, SyncType, CONF_ACTIVE_ON, CONF_ACTIVE_INIT, CONF_ACTIVE_OFF
 from .inbound import DynetInbound
 
 DEFAULT_LOG = logging.getLogger(__name__)
@@ -310,7 +310,7 @@ class Dynet(object):
         self,
         host=None,
         port=None,
-        active=False,
+        active=CONF_ACTIVE_OFF,
         broadcaster=None,
         onConnect=None,
         onDisconnect=None,
@@ -527,7 +527,7 @@ class Dynet(object):
             msg.append(packet.data[2])
             msg.append(packet.join)
             msg.append(packet.chk)
-            assert self.active or packet.command not in [OpcodeType.REQUEST_CHANNEL_LEVEL.value, OpcodeType.REQUEST_PRESET.value]
+            assert self.active in [CONF_ACTIVE_ON, CONF_ACTIVE_INIT] or packet.command not in [OpcodeType.REQUEST_CHANNEL_LEVEL.value, OpcodeType.REQUEST_PRESET.value]
             self._transport.write(msg)
             self._logger.debug("Dynet Sent: %s" % msg)
             self._lastSent = int(round(time.time() * 1000))
